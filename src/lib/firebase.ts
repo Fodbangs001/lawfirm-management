@@ -23,14 +23,14 @@
 import { initializeApp } from 'firebase/app'
 import { getFirestore, collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, limit, setDoc } from 'firebase/firestore'
 
-// Firebase configuration - REPLACE WITH YOUR OWN VALUES
+// Firebase configuration - Law Firm Management
 const firebaseConfig = {
-  apiKey: "AIzaSyDemoKeyReplaceMeWithYourActualKey",
-  authDomain: "your-project-id.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project-id.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef123456"
+  apiKey: "AIzaSyBohoQw5gniCnTW_9mzQPJ25oiEJCryiZg",
+  authDomain: "lawfirm-management-1cd2a.firebaseapp.com",
+  projectId: "lawfirm-management-1cd2a",
+  storageBucket: "lawfirm-management-1cd2a.firebasestorage.app",
+  messagingSenderId: "753464690092",
+  appId: "1:753464690092:web:f23d7f2533bf20dcc56609"
 }
 
 // Initialize Firebase
