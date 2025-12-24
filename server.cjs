@@ -6,6 +6,11 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'lawfirm-secret-2024-production';
+// If Hostinger mounts the Node app under a subdirectory, set BASE_PATH (e.g. "/app").
+const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/+$/, '');
+
+// Make Express aware it's behind a reverse proxy (Hostinger).
+app.set('trust proxy', 1);
 
 // In-memory database for Hostinger (no native modules needed)
 const db = {
@@ -68,8 +73,18 @@ const verifyToken = (token) => {
 };
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN || true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
 app.use(express.json());
+
+// If deployed under a base path, mount the whole app there.
+const router = express.Router();
 
 // Auth middleware
 const auth = (req, res, next) => {
@@ -83,7 +98,7 @@ const auth = (req, res, next) => {
 
 // ==================== AUTH ROUTES ====================
 
-app.post('/api/auth/login', (req, res) => {
+router.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
   const user = db.users.find(u => u.email === email);
   if (!user || user.password_hash !== hashPassword(password)) {
@@ -96,7 +111,7 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
-app.post('/api/auth/register', (req, res) => {
+router.post('/api/auth/register', (req, res) => {
   const { name, email, password, role } = req.body;
   if (db.users.find(u => u.email === email)) {
     return res.status(400).json({ error: 'Email already registered' });
@@ -118,7 +133,7 @@ app.post('/api/auth/register', (req, res) => {
   });
 });
 
-app.get('/api/auth/me', auth, (req, res) => {
+router.get('/api/auth/me', auth, (req, res) => {
   const user = db.users.find(u => u.id === req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
@@ -126,11 +141,11 @@ app.get('/api/auth/me', auth, (req, res) => {
 
 // ==================== USERS ROUTES ====================
 
-app.get('/api/users', auth, (req, res) => {
+router.get('/api/users', auth, (req, res) => {
   res.json(db.users.map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role, status: u.status })));
 });
 
-app.post('/api/users', auth, (req, res) => {
+router.post('/api/users', auth, (req, res) => {
   const { name, email, password, role } = req.body;
   if (db.users.find(u => u.email === email)) {
     return res.status(400).json({ error: 'Email already exists' });
@@ -148,7 +163,7 @@ app.post('/api/users', auth, (req, res) => {
   res.json({ id: user.id, name: user.name, email: user.email, role: user.role, status: user.status });
 });
 
-app.put('/api/users/:id', auth, (req, res) => {
+router.put('/api/users/:id', auth, (req, res) => {
   const user = db.users.find(u => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   Object.assign(user, req.body);
@@ -156,7 +171,7 @@ app.put('/api/users/:id', auth, (req, res) => {
   res.json({ id: user.id, name: user.name, email: user.email, role: user.role, status: user.status });
 });
 
-app.delete('/api/users/:id', auth, (req, res) => {
+router.delete('/api/users/:id', auth, (req, res) => {
   const index = db.users.findIndex(u => u.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: 'User not found' });
   db.users.splice(index, 1);
@@ -165,11 +180,11 @@ app.delete('/api/users/:id', auth, (req, res) => {
 
 // ==================== CLIENTS ROUTES ====================
 
-app.get('/api/clients', auth, (req, res) => {
+router.get('/api/clients', auth, (req, res) => {
   res.json(db.clients);
 });
 
-app.post('/api/clients', auth, (req, res) => {
+router.post('/api/clients', auth, (req, res) => {
   const client = {
     id: crypto.randomUUID(),
     ...req.body,
@@ -179,14 +194,14 @@ app.post('/api/clients', auth, (req, res) => {
   res.json(client);
 });
 
-app.put('/api/clients/:id', auth, (req, res) => {
+router.put('/api/clients/:id', auth, (req, res) => {
   const client = db.clients.find(c => c.id === req.params.id);
   if (!client) return res.status(404).json({ error: 'Client not found' });
   Object.assign(client, req.body);
   res.json(client);
 });
 
-app.delete('/api/clients/:id', auth, (req, res) => {
+router.delete('/api/clients/:id', auth, (req, res) => {
   const index = db.clients.findIndex(c => c.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: 'Client not found' });
   db.clients.splice(index, 1);
@@ -195,11 +210,11 @@ app.delete('/api/clients/:id', auth, (req, res) => {
 
 // ==================== CASES ROUTES ====================
 
-app.get('/api/cases', auth, (req, res) => {
+router.get('/api/cases', auth, (req, res) => {
   res.json(db.cases);
 });
 
-app.post('/api/cases', auth, (req, res) => {
+router.post('/api/cases', auth, (req, res) => {
   const caseItem = {
     id: crypto.randomUUID(),
     ...req.body,
@@ -209,14 +224,14 @@ app.post('/api/cases', auth, (req, res) => {
   res.json(caseItem);
 });
 
-app.put('/api/cases/:id', auth, (req, res) => {
+router.put('/api/cases/:id', auth, (req, res) => {
   const caseItem = db.cases.find(c => c.id === req.params.id);
   if (!caseItem) return res.status(404).json({ error: 'Case not found' });
   Object.assign(caseItem, req.body);
   res.json(caseItem);
 });
 
-app.delete('/api/cases/:id', auth, (req, res) => {
+router.delete('/api/cases/:id', auth, (req, res) => {
   const index = db.cases.findIndex(c => c.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: 'Case not found' });
   db.cases.splice(index, 1);
@@ -225,11 +240,11 @@ app.delete('/api/cases/:id', auth, (req, res) => {
 
 // ==================== TASKS ROUTES ====================
 
-app.get('/api/tasks', auth, (req, res) => {
+router.get('/api/tasks', auth, (req, res) => {
   res.json(db.tasks);
 });
 
-app.post('/api/tasks', auth, (req, res) => {
+router.post('/api/tasks', auth, (req, res) => {
   const task = {
     id: crypto.randomUUID(),
     ...req.body,
@@ -239,14 +254,14 @@ app.post('/api/tasks', auth, (req, res) => {
   res.json(task);
 });
 
-app.put('/api/tasks/:id', auth, (req, res) => {
+router.put('/api/tasks/:id', auth, (req, res) => {
   const task = db.tasks.find(t => t.id === req.params.id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
   Object.assign(task, req.body);
   res.json(task);
 });
 
-app.delete('/api/tasks/:id', auth, (req, res) => {
+router.delete('/api/tasks/:id', auth, (req, res) => {
   const index = db.tasks.findIndex(t => t.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: 'Task not found' });
   db.tasks.splice(index, 1);
@@ -255,11 +270,11 @@ app.delete('/api/tasks/:id', auth, (req, res) => {
 
 // ==================== MESSAGES ROUTES ====================
 
-app.get('/api/messages', auth, (req, res) => {
+router.get('/api/messages', auth, (req, res) => {
   res.json(db.messages);
 });
 
-app.post('/api/messages', auth, (req, res) => {
+router.post('/api/messages', auth, (req, res) => {
   const message = {
     id: crypto.randomUUID(),
     ...req.body,
@@ -270,14 +285,14 @@ app.post('/api/messages', auth, (req, res) => {
   res.json(message);
 });
 
-app.put('/api/messages/:id/read', auth, (req, res) => {
+router.put('/api/messages/:id/read', auth, (req, res) => {
   const message = db.messages.find(m => m.id === req.params.id);
   if (!message) return res.status(404).json({ error: 'Message not found' });
   message.read = true;
   res.json(message);
 });
 
-app.delete('/api/messages/:id', auth, (req, res) => {
+router.delete('/api/messages/:id', auth, (req, res) => {
   const index = db.messages.findIndex(m => m.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: 'Message not found' });
   db.messages.splice(index, 1);
@@ -286,11 +301,11 @@ app.delete('/api/messages/:id', auth, (req, res) => {
 
 // ==================== PAYMENTS ROUTES ====================
 
-app.get('/api/payments', auth, (req, res) => {
+router.get('/api/payments', auth, (req, res) => {
   res.json(db.payments);
 });
 
-app.post('/api/payments', auth, (req, res) => {
+router.post('/api/payments', auth, (req, res) => {
   const payment = {
     id: crypto.randomUUID(),
     ...req.body,
@@ -300,14 +315,14 @@ app.post('/api/payments', auth, (req, res) => {
   res.json(payment);
 });
 
-app.put('/api/payments/:id', auth, (req, res) => {
+router.put('/api/payments/:id', auth, (req, res) => {
   const payment = db.payments.find(p => p.id === req.params.id);
   if (!payment) return res.status(404).json({ error: 'Payment not found' });
   Object.assign(payment, req.body);
   res.json(payment);
 });
 
-app.delete('/api/payments/:id', auth, (req, res) => {
+router.delete('/api/payments/:id', auth, (req, res) => {
   const index = db.payments.findIndex(p => p.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: 'Payment not found' });
   db.payments.splice(index, 1);
@@ -316,11 +331,11 @@ app.delete('/api/payments/:id', auth, (req, res) => {
 
 // ==================== EXPENSES ROUTES ====================
 
-app.get('/api/expenses', auth, (req, res) => {
+router.get('/api/expenses', auth, (req, res) => {
   res.json(db.expenses);
 });
 
-app.post('/api/expenses', auth, (req, res) => {
+router.post('/api/expenses', auth, (req, res) => {
   const expense = {
     id: crypto.randomUUID(),
     ...req.body,
@@ -330,14 +345,14 @@ app.post('/api/expenses', auth, (req, res) => {
   res.json(expense);
 });
 
-app.put('/api/expenses/:id', auth, (req, res) => {
+router.put('/api/expenses/:id', auth, (req, res) => {
   const expense = db.expenses.find(e => e.id === req.params.id);
   if (!expense) return res.status(404).json({ error: 'Expense not found' });
   Object.assign(expense, req.body);
   res.json(expense);
 });
 
-app.delete('/api/expenses/:id', auth, (req, res) => {
+router.delete('/api/expenses/:id', auth, (req, res) => {
   const index = db.expenses.findIndex(e => e.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: 'Expense not found' });
   db.expenses.splice(index, 1);
@@ -346,11 +361,11 @@ app.delete('/api/expenses/:id', auth, (req, res) => {
 
 // ==================== COURT DATES ROUTES ====================
 
-app.get('/api/court-dates', auth, (req, res) => {
+router.get('/api/court-dates', auth, (req, res) => {
   res.json(db.courtDates);
 });
 
-app.post('/api/court-dates', auth, (req, res) => {
+router.post('/api/court-dates', auth, (req, res) => {
   const courtDate = {
     id: crypto.randomUUID(),
     ...req.body,
@@ -360,14 +375,14 @@ app.post('/api/court-dates', auth, (req, res) => {
   res.json(courtDate);
 });
 
-app.put('/api/court-dates/:id', auth, (req, res) => {
+router.put('/api/court-dates/:id', auth, (req, res) => {
   const courtDate = db.courtDates.find(c => c.id === req.params.id);
   if (!courtDate) return res.status(404).json({ error: 'Court date not found' });
   Object.assign(courtDate, req.body);
   res.json(courtDate);
 });
 
-app.delete('/api/court-dates/:id', auth, (req, res) => {
+router.delete('/api/court-dates/:id', auth, (req, res) => {
   const index = db.courtDates.findIndex(c => c.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: 'Court date not found' });
   db.courtDates.splice(index, 1);
@@ -376,11 +391,11 @@ app.delete('/api/court-dates/:id', auth, (req, res) => {
 
 // ==================== DOCUMENTS ROUTES ====================
 
-app.get('/api/documents', auth, (req, res) => {
+router.get('/api/documents', auth, (req, res) => {
   res.json(db.documents);
 });
 
-app.post('/api/documents', auth, (req, res) => {
+router.post('/api/documents', auth, (req, res) => {
   const document = {
     id: crypto.randomUUID(),
     ...req.body,
@@ -391,7 +406,7 @@ app.post('/api/documents', auth, (req, res) => {
   res.json(document);
 });
 
-app.delete('/api/documents/:id', auth, (req, res) => {
+router.delete('/api/documents/:id', auth, (req, res) => {
   const index = db.documents.findIndex(d => d.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: 'Document not found' });
   db.documents.splice(index, 1);
@@ -400,7 +415,7 @@ app.delete('/api/documents/:id', auth, (req, res) => {
 
 // ==================== DASHBOARD STATS ====================
 
-app.get('/api/stats', auth, (req, res) => {
+router.get('/api/stats', auth, (req, res) => {
   const totalRevenue = db.payments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
   const totalExpenses = db.expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
 
@@ -417,19 +432,21 @@ app.get('/api/stats', auth, (req, res) => {
 });
 
 // Serve static files from the dist directory
-app.use(express.static(path.join(__dirname, 'dist')));
+router.use(express.static(path.join(__dirname, 'dist')));
 
 // Handle SPA routing - serve index.html for all non-API routes
-app.use((req, res, next) => {
+router.use((req, res, next) => {
   if (!req.path.startsWith('/api')) {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-  } else {
-    next();
+    return res.sendFile(path.join(__dirname, 'dist', 'index.html'));
   }
+  next();
 });
+
+app.use(BASE_PATH || '/', router);
 
 app.listen(PORT, () => {
   console.log(`✅ Law Firm Server running on port ${PORT}`);
+  if (BASE_PATH) console.log(`🔧 BASE_PATH: ${BASE_PATH}`);
   console.log(`📧 Demo accounts:`);
   console.log(`   - admin@lawfirm.com / admin123`);
   console.log(`   - john@lawfirm.com / admin123`);

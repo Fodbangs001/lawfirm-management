@@ -23,9 +23,13 @@ Upload the **entire repository** (recommended) OR at minimum:
 5. Set **Run command** to:
    - `npm start`
 
-### Environment variables
+## Environment variables
 - `PORT` is provided by Hostinger automatically.
 - (Recommended) Set `JWT_SECRET` to a long random value.
+- `BASE_PATH` (only if Hostinger mounts your Node app under a subfolder):
+  - Example: if your app URL is `https://example.com/app/`, set `BASE_PATH=/app`
+  - If your app runs at the domain root (`https://example.com/`), leave `BASE_PATH` empty.
+- `CORS_ORIGIN` (optional): set to your site origin, e.g. `https://example.com`
 
 ## Build behavior
 This repo has a `postinstall` hook:
@@ -42,3 +46,5 @@ npm start
 ```
 Then open `http://localhost:3000` (or the `PORT` you set).
 
+Or (PowerShell):
+- `./deployment/hostinger-smoke-test.ps1`
