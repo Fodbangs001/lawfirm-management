@@ -1,171 +1,325 @@
 // ============================================
-// LOCAL STORAGE DATABASE - Static Implementation
+// FIREBASE STORAGE - Cloud Database Implementation
+// Data persists across ALL browsers and devices
 // ============================================
 
+import { 
+  db, 
+  COLLECTIONS,
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  where,
+  setDoc,
+} from './firebase'
 import { User, Client, Case, Task, CourtLog, Message, TimeEntry, Invoice } from './types'
-
-const STORAGE_KEYS = {
-  users: 'lawfirm_users',
-  clients: 'lawfirm_clients',
-  cases: 'lawfirm_cases',
-  tasks: 'lawfirm_tasks',
-  courtLogs: 'lawfirm_court_logs',
-  messages: 'lawfirm_messages',
-  timeEntries: 'lawfirm_time_entries',
-  invoices: 'lawfirm_invoices',
-  currentUser: 'lawfirm_current_user',
-  authToken: 'auth_token',
-}
 
 // Generate unique ID
 const generateId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
-// Default admin user
-const DEFAULT_ADMIN: User = {
-  id: 'user-admin-001',
-  name: 'Admin User',
-  email: 'admin@lawfirm.com',
-  role: 'Admin',
-  status: 'active',
-  createdAt: new Date().toISOString(),
+// ============================================
+// DEFAULT SAMPLE DATA (for initial setup)
+// ============================================
+
+const DEFAULT_USERS: User[] = [
+  {
+    id: 'user-admin-001',
+    name: 'Admin User',
+    email: 'admin@lawfirm.com',
+    role: 'Admin',
+    status: 'active',
+    createdAt: '2024-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'user-lawyer-001',
+    name: 'John Smith',
+    email: 'john@lawfirm.com',
+    role: 'Lawyer',
+    status: 'active',
+    createdAt: '2024-01-15T00:00:00.000Z',
+  },
+  {
+    id: 'user-lawyer-002',
+    name: 'Sarah Johnson',
+    email: 'sarah@lawfirm.com',
+    role: 'Lawyer',
+    status: 'active',
+    createdAt: '2024-02-01T00:00:00.000Z',
+  },
+]
+
+const DEFAULT_PASSWORDS: Record<string, string> = {
+  'user-admin-001': 'admin123',
+  'user-lawyer-001': 'lawyer123',
+  'user-lawyer-002': 'lawyer123',
 }
 
-// Password storage (simple hash for demo - in production use proper encryption)
-const PASSWORDS_KEY = 'lawfirm_passwords'
+const DEFAULT_CLIENTS: Client[] = [
+  {
+    id: 'client-001',
+    name: 'James Anderson',
+    firstName: 'James',
+    lastName: 'Anderson',
+    email: 'james.anderson@email.com',
+    phone: '+1-555-0101',
+    type: 'Individual',
+    address: '123 Main Street, New York, NY 10001',
+    createdAt: '2024-03-01T00:00:00.000Z',
+  },
+  {
+    id: 'client-002',
+    name: 'Tech Solutions Inc.',
+    companyName: 'Tech Solutions Inc.',
+    email: 'legal@techsolutions.com',
+    phone: '+1-555-0102',
+    type: 'Corporate',
+    address: '456 Business Ave, San Francisco, CA 94102',
+    createdAt: '2024-03-15T00:00:00.000Z',
+  },
+  {
+    id: 'client-003',
+    name: 'Maria Garcia',
+    firstName: 'Maria',
+    lastName: 'Garcia',
+    email: 'maria.garcia@email.com',
+    phone: '+1-555-0103',
+    type: 'Individual',
+    address: '789 Oak Lane, Los Angeles, CA 90001',
+    createdAt: '2024-04-01T00:00:00.000Z',
+  },
+]
 
-function getPasswords(): Record<string, string> {
-  const data = localStorage.getItem(PASSWORDS_KEY)
-  return data ? JSON.parse(data) : { 'user-admin-001': 'admin123' }
-}
+const DEFAULT_CASES: Case[] = [
+  {
+    id: 'case-001',
+    title: 'H1B Visa Application - James Anderson',
+    caseNumber: 'CASE-2024-001',
+    type: 'General',
+    status: 'Open',
+    clientId: 'client-001',
+    assignedTo: ['user-lawyer-001'],
+    description: 'H1B visa application for software engineer position',
+    createdAt: '2024-03-05T00:00:00.000Z',
+    updatedAt: '2024-12-20T00:00:00.000Z',
+  },
+  {
+    id: 'case-002',
+    title: 'Asylum Application - Maria Garcia',
+    caseNumber: 'CASE-2024-002',
+    type: 'Asylum',
+    status: 'Open',
+    clientId: 'client-003',
+    assignedTo: ['user-lawyer-002'],
+    description: 'Asylum application',
+    createdAt: '2024-04-05T00:00:00.000Z',
+    updatedAt: '2024-12-22T00:00:00.000Z',
+  },
+]
 
-function setPassword(userId: string, password: string) {
-  const passwords = getPasswords()
-  passwords[userId] = password
-  localStorage.setItem(PASSWORDS_KEY, JSON.stringify(passwords))
-}
+const DEFAULT_TASKS: Task[] = [
+  {
+    id: 'task-001',
+    title: 'Prepare H1B petition documents',
+    description: 'Gather and prepare all required documents',
+    assignedTo: 'user-lawyer-001',
+    caseId: 'case-001',
+    dueDate: '2024-12-30T00:00:00.000Z',
+    priority: 'High',
+    status: 'In Progress',
+    createdAt: '2024-12-01T00:00:00.000Z',
+  },
+  {
+    id: 'task-002',
+    title: 'Client follow-up call',
+    description: 'Schedule follow-up with Maria Garcia',
+    assignedTo: 'user-lawyer-002',
+    caseId: 'case-002',
+    dueDate: '2024-12-28T00:00:00.000Z',
+    priority: 'Medium',
+    status: 'Todo',
+    createdAt: '2024-12-05T00:00:00.000Z',
+  },
+]
 
-function verifyPassword(userId: string, password: string): boolean {
-  const passwords = getPasswords()
-  return passwords[userId] === password
-}
+// ============================================
+// INITIALIZE DATABASE WITH SAMPLE DATA
+// ============================================
 
-// Generic storage helpers
-function getData<T>(key: string, defaultValue: T[] = []): T[] {
-  const data = localStorage.getItem(key)
-  if (!data) return defaultValue
+async function initializeDatabase() {
   try {
-    return JSON.parse(data)
-  } catch {
-    return defaultValue
+    // Check if database is already initialized
+    const settingsRef = doc(db, COLLECTIONS.settings, 'init')
+    const settingsDoc = await getDoc(settingsRef)
+    
+    if (settingsDoc.exists()) {
+      console.log('✅ Database already initialized')
+      return
+    }
+
+    console.log('🔄 Initializing database with sample data...')
+
+    // Add default users
+    for (const user of DEFAULT_USERS) {
+      await setDoc(doc(db, COLLECTIONS.users, user.id), user)
+    }
+
+    // Add default passwords
+    for (const [userId, password] of Object.entries(DEFAULT_PASSWORDS)) {
+      await setDoc(doc(db, COLLECTIONS.passwords, userId), { password })
+    }
+
+    // Add default clients
+    for (const client of DEFAULT_CLIENTS) {
+      await setDoc(doc(db, COLLECTIONS.clients, client.id), client)
+    }
+
+    // Add default cases
+    for (const caseItem of DEFAULT_CASES) {
+      await setDoc(doc(db, COLLECTIONS.cases, caseItem.id), caseItem)
+    }
+
+    // Add default tasks
+    for (const task of DEFAULT_TASKS) {
+      await setDoc(doc(db, COLLECTIONS.tasks, task.id), task)
+    }
+
+    // Mark as initialized
+    await setDoc(settingsRef, { initialized: true, date: new Date().toISOString() })
+
+    console.log('✅ Database initialized with sample data')
+  } catch (error) {
+    console.error('Error initializing database:', error)
   }
 }
 
-function setData<T>(key: string, data: T[]) {
-  localStorage.setItem(key, JSON.stringify(data))
-}
+// Initialize on import
+initializeDatabase()
 
-// Initialize default data if empty
-function initializeStorage() {
-  // Initialize users with default admin
-  const users = getData<User>(STORAGE_KEYS.users)
-  if (users.length === 0) {
-    setData(STORAGE_KEYS.users, [DEFAULT_ADMIN])
-    setPassword(DEFAULT_ADMIN.id, 'admin123')
-  }
-
-  // Initialize other collections as empty if not present
-  if (!localStorage.getItem(STORAGE_KEYS.clients)) setData(STORAGE_KEYS.clients, [])
-  if (!localStorage.getItem(STORAGE_KEYS.cases)) setData(STORAGE_KEYS.cases, [])
-  if (!localStorage.getItem(STORAGE_KEYS.tasks)) setData(STORAGE_KEYS.tasks, [])
-  if (!localStorage.getItem(STORAGE_KEYS.courtLogs)) setData(STORAGE_KEYS.courtLogs, [])
-  if (!localStorage.getItem(STORAGE_KEYS.messages)) setData(STORAGE_KEYS.messages, [])
-  if (!localStorage.getItem(STORAGE_KEYS.timeEntries)) setData(STORAGE_KEYS.timeEntries, [])
-  if (!localStorage.getItem(STORAGE_KEYS.invoices)) setData(STORAGE_KEYS.invoices, [])
-}
-
-// Initialize on load
-initializeStorage()
-
-// ==================== AUTH ====================
+// ============================================
+// AUTH STORAGE
+// ============================================
 
 export const authStorage = {
-  login(email: string, password: string): { user: User; token: string } | null {
-    const users = getData<User & { password?: string }>(STORAGE_KEYS.users)
-    const user = users.find(u => u.email === email)
-    
-    if (!user) return null
-    if (!verifyPassword(user.id, password)) return null
-    if (user.status !== 'active') return null
+  async login(email: string, password: string): Promise<{ user: User; token: string } | null> {
+    try {
+      // Find user by email
+      const usersRef = collection(db, COLLECTIONS.users)
+      const q = query(usersRef, where('email', '==', email))
+      const snapshot = await getDocs(q)
+      
+      if (snapshot.empty) return null
+      
+      const userDoc = snapshot.docs[0]
+      const user = { id: userDoc.id, ...userDoc.data() } as User
+      
+      if (user.status !== 'active') return null
 
-    const token = `static-token-${user.id}-${Date.now()}`
-    localStorage.setItem(STORAGE_KEYS.authToken, token)
-    localStorage.setItem(STORAGE_KEYS.currentUser, JSON.stringify(user))
-    
-    return { user, token }
+      // Verify password
+      const passwordDoc = await getDoc(doc(db, COLLECTIONS.passwords, user.id))
+      if (!passwordDoc.exists()) return null
+      
+      const storedPassword = passwordDoc.data().password
+      if (storedPassword !== password) return null
+
+      const token = `firebase-token-${user.id}-${Date.now()}`
+      
+      // Store in localStorage for session persistence
+      localStorage.setItem('auth_token', token)
+      localStorage.setItem('lawfirm_current_user', JSON.stringify(user))
+      
+      return { user, token }
+    } catch (error) {
+      console.error('Login error:', error)
+      return null
+    }
   },
 
-  register(name: string, email: string, password: string, role: string = 'Staff'): { user: User; token: string } | null {
-    const users = getData<User>(STORAGE_KEYS.users)
-    
-    if (users.find(u => u.email === email)) {
-      throw new Error('Email already registered')
+  async register(name: string, email: string, password: string, role: string = 'Staff'): Promise<{ user: User; token: string } | null> {
+    try {
+      // Check if email exists
+      const usersRef = collection(db, COLLECTIONS.users)
+      const q = query(usersRef, where('email', '==', email))
+      const snapshot = await getDocs(q)
+      
+      if (!snapshot.empty) {
+        throw new Error('Email already registered')
+      }
+
+      const userId = generateId('user')
+      const user: User = {
+        id: userId,
+        name,
+        email,
+        role: role as User['role'],
+        status: 'active',
+        createdAt: new Date().toISOString(),
+      }
+
+      await setDoc(doc(db, COLLECTIONS.users, userId), user)
+      await setDoc(doc(db, COLLECTIONS.passwords, userId), { password })
+
+      const token = `firebase-token-${userId}-${Date.now()}`
+      
+      localStorage.setItem('auth_token', token)
+      localStorage.setItem('lawfirm_current_user', JSON.stringify(user))
+
+      return { user, token }
+    } catch (error) {
+      console.error('Register error:', error)
+      throw error
     }
-
-    const user: User = {
-      id: generateId('user'),
-      name,
-      email,
-      role: role as User['role'],
-      status: 'active',
-      createdAt: new Date().toISOString(),
-    }
-
-    users.push(user)
-    setData(STORAGE_KEYS.users, users)
-    setPassword(user.id, password)
-
-    const token = `static-token-${user.id}-${Date.now()}`
-    localStorage.setItem(STORAGE_KEYS.authToken, token)
-    localStorage.setItem(STORAGE_KEYS.currentUser, JSON.stringify(user))
-
-    return { user, token }
   },
 
   getCurrentUser(): User | null {
-    const data = localStorage.getItem(STORAGE_KEYS.currentUser)
+    const data = localStorage.getItem('lawfirm_current_user')
     return data ? JSON.parse(data) : null
   },
 
   logout() {
-    localStorage.removeItem(STORAGE_KEYS.authToken)
-    localStorage.removeItem(STORAGE_KEYS.currentUser)
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('lawfirm_current_user')
   },
 
   getToken(): string | null {
-    return localStorage.getItem(STORAGE_KEYS.authToken)
+    return localStorage.getItem('auth_token')
   },
 }
 
-// ==================== USERS ====================
+// ============================================
+// USERS STORAGE
+// ============================================
 
 export const usersStorage = {
-  getAll(): User[] {
-    return getData<User>(STORAGE_KEYS.users)
-  },
-
-  getById(id: string): User | undefined {
-    return getData<User>(STORAGE_KEYS.users).find(u => u.id === id)
-  },
-
-  create(data: { name: string; email: string; password: string; role: string }): User {
-    const users = getData<User>(STORAGE_KEYS.users)
-    
-    if (users.find(u => u.email === data.email)) {
-      throw new Error('Email already registered')
+  async getAll(): Promise<User[]> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.users))
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User))
+    } catch (error) {
+      console.error('Error getting users:', error)
+      return []
     }
+  },
 
+  async getById(id: string): Promise<User | undefined> {
+    try {
+      const docRef = await getDoc(doc(db, COLLECTIONS.users, id))
+      if (!docRef.exists()) return undefined
+      return { id: docRef.id, ...docRef.data() } as User
+    } catch (error) {
+      console.error('Error getting user:', error)
+      return undefined
+    }
+  },
+
+  async create(data: { name: string; email: string; password: string; role: string }): Promise<User> {
+    const userId = generateId('user')
     const user: User = {
-      id: generateId('user'),
+      id: userId,
       name: data.name,
       email: data.email,
       role: data.role as User['role'],
@@ -173,85 +327,89 @@ export const usersStorage = {
       createdAt: new Date().toISOString(),
     }
 
-    users.push(user)
-    setData(STORAGE_KEYS.users, users)
-    setPassword(user.id, data.password)
+    await setDoc(doc(db, COLLECTIONS.users, userId), user)
+    await setDoc(doc(db, COLLECTIONS.passwords, userId), { password: data.password })
 
     return user
   },
 
-  update(id: string, data: Partial<User> & { password?: string }): User {
-    const users = getData<User>(STORAGE_KEYS.users)
-    const index = users.findIndex(u => u.id === id)
-    
-    if (index === -1) throw new Error('User not found')
-
+  async update(id: string, data: Partial<User> & { password?: string }): Promise<User> {
     const { password, ...userData } = data
-    users[index] = { ...users[index], ...userData }
-    setData(STORAGE_KEYS.users, users)
-
+    
+    const userRef = doc(db, COLLECTIONS.users, id)
+    await updateDoc(userRef, userData)
+    
     if (password) {
-      setPassword(id, password)
+      await setDoc(doc(db, COLLECTIONS.passwords, id), { password })
     }
 
-    return users[index]
+    const updated = await getDoc(userRef)
+    return { id, ...updated.data() } as User
   },
 
-  delete(id: string): void {
-    const users = getData<User>(STORAGE_KEYS.users)
-    const filtered = users.filter(u => u.id !== id)
-    setData(STORAGE_KEYS.users, filtered)
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.users, id))
+    await deleteDoc(doc(db, COLLECTIONS.passwords, id))
   },
 }
 
-// ==================== CLIENTS ====================
+// ============================================
+// CLIENTS STORAGE
+// ============================================
 
 export const clientsStorage = {
-  getAll(params: Record<string, any> = {}): { clients: Client[]; pagination: any } {
-    let clients = getData<Client>(STORAGE_KEYS.clients)
-    
-    // Search filter
-    if (params.search) {
-      const search = params.search.toLowerCase()
-      clients = clients.filter(c => 
-        c.name?.toLowerCase().includes(search) ||
-        c.email?.toLowerCase().includes(search) ||
-        c.phone?.includes(search)
-      )
-    }
+  async getAll(params: Record<string, any> = {}): Promise<{ clients: Client[]; pagination: any }> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.clients))
+      let clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client))
+      
+      // Search filter
+      if (params.search) {
+        const search = params.search.toLowerCase()
+        clients = clients.filter(c => 
+          c.name?.toLowerCase().includes(search) ||
+          c.email?.toLowerCase().includes(search) ||
+          c.phone?.includes(search)
+        )
+      }
 
-    // Type filter
-    if (params.type) {
-      clients = clients.filter(c => c.type === params.type)
-    }
+      // Type filter
+      if (params.type) {
+        clients = clients.filter(c => c.type === params.type)
+      }
 
-    const total = clients.length
-    const page = parseInt(params.page) || 1
-    const limit = parseInt(params.limit) || 50
-    const offset = (page - 1) * limit
+      const total = clients.length
+      const page = parseInt(params.page) || 1
+      const limit = parseInt(params.limit) || 50
+      const offset = (page - 1) * limit
 
-    clients = clients.slice(offset, offset + limit)
+      clients = clients.slice(offset, offset + limit)
 
-    return {
-      clients,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+      return {
+        clients,
+        pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      }
+    } catch (error) {
+      console.error('Error getting clients:', error)
+      return { clients: [], pagination: { total: 0, page: 1, limit: 50, totalPages: 0 } }
     }
   },
 
-  getById(id: string): Client | undefined {
-    return getData<Client>(STORAGE_KEYS.clients).find(c => c.id === id)
+  async getById(id: string): Promise<Client | undefined> {
+    try {
+      const docRef = await getDoc(doc(db, COLLECTIONS.clients, id))
+      if (!docRef.exists()) return undefined
+      return { id: docRef.id, ...docRef.data() } as Client
+    } catch (error) {
+      console.error('Error getting client:', error)
+      return undefined
+    }
   },
 
-  create(data: Partial<Client>): Client {
-    const clients = getData<Client>(STORAGE_KEYS.clients)
-    
+  async create(data: Partial<Client>): Promise<Client> {
+    const clientId = generateId('client')
     const client: Client = {
-      id: generateId('client'),
+      id: clientId,
       name: data.name || '',
       email: data.email || '',
       phone: data.phone || '',
@@ -260,84 +418,65 @@ export const clientsStorage = {
       ...data,
     }
 
-    clients.push(client)
-    setData(STORAGE_KEYS.clients, clients)
-
+    await setDoc(doc(db, COLLECTIONS.clients, clientId), client)
     return client
   },
 
-  update(id: string, data: Partial<Client>): Client {
-    const clients = getData<Client>(STORAGE_KEYS.clients)
-    const index = clients.findIndex(c => c.id === id)
-    
-    if (index === -1) throw new Error('Client not found')
-
-    clients[index] = { ...clients[index], ...data }
-    setData(STORAGE_KEYS.clients, clients)
-
-    return clients[index]
+  async update(id: string, data: Partial<Client>): Promise<Client> {
+    const clientRef = doc(db, COLLECTIONS.clients, id)
+    await updateDoc(clientRef, data)
+    const updated = await getDoc(clientRef)
+    return { id, ...updated.data() } as Client
   },
 
-  delete(id: string): void {
-    const clients = getData<Client>(STORAGE_KEYS.clients)
-    const filtered = clients.filter(c => c.id !== id)
-    setData(STORAGE_KEYS.clients, filtered)
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.clients, id))
   },
 }
 
-// ==================== CASES ====================
+// ============================================
+// CASES STORAGE
+// ============================================
 
 export const casesStorage = {
-  getAll(params: Record<string, any> = {}): { cases: Case[]; pagination: any } {
-    let cases = getData<Case>(STORAGE_KEYS.cases)
-    
-    if (params.search) {
-      const search = params.search.toLowerCase()
-      cases = cases.filter(c => 
-        c.title?.toLowerCase().includes(search) ||
-        c.caseNumber?.toLowerCase().includes(search)
-      )
-    }
+  async getAll(params: Record<string, any> = {}): Promise<{ cases: Case[]; pagination: any }> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.cases))
+      let cases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Case))
+      
+      if (params.search) {
+        const search = params.search.toLowerCase()
+        cases = cases.filter(c => 
+          c.title?.toLowerCase().includes(search) ||
+          c.caseNumber?.toLowerCase().includes(search)
+        )
+      }
 
-    if (params.status) {
-      cases = cases.filter(c => c.status === params.status)
-    }
+      if (params.status) cases = cases.filter(c => c.status === params.status)
+      if (params.type) cases = cases.filter(c => c.type === params.type)
+      if (params.clientId) cases = cases.filter(c => c.clientId === params.clientId)
 
-    if (params.type) {
-      cases = cases.filter(c => c.type === params.type)
-    }
+      const total = cases.length
+      const page = parseInt(params.page) || 1
+      const limit = parseInt(params.limit) || 50
+      const offset = (page - 1) * limit
 
-    if (params.clientId) {
-      cases = cases.filter(c => c.clientId === params.clientId)
-    }
+      cases = cases.slice(offset, offset + limit)
 
-    const total = cases.length
-    const page = parseInt(params.page) || 1
-    const limit = parseInt(params.limit) || 50
-    const offset = (page - 1) * limit
-
-    cases = cases.slice(offset, offset + limit)
-
-    return {
-      cases,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+      return {
+        cases,
+        pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      }
+    } catch (error) {
+      console.error('Error getting cases:', error)
+      return { cases: [], pagination: { total: 0, page: 1, limit: 50, totalPages: 0 } }
     }
   },
 
-  getById(id: string): Case | undefined {
-    return getData<Case>(STORAGE_KEYS.cases).find(c => c.id === id)
-  },
-
-  create(data: Partial<Case>): Case {
-    const cases = getData<Case>(STORAGE_KEYS.cases)
-    
+  async create(data: Partial<Case>): Promise<Case> {
+    const caseId = generateId('case')
     const newCase: Case = {
-      id: generateId('case'),
+      id: caseId,
       title: data.title || '',
       caseNumber: data.caseNumber || `CASE-${Date.now()}`,
       type: data.type || 'General',
@@ -349,57 +488,47 @@ export const casesStorage = {
       ...data,
     }
 
-    cases.push(newCase)
-    setData(STORAGE_KEYS.cases, cases)
-
+    await setDoc(doc(db, COLLECTIONS.cases, caseId), newCase)
     return newCase
   },
 
-  update(id: string, data: Partial<Case>): Case {
-    const cases = getData<Case>(STORAGE_KEYS.cases)
-    const index = cases.findIndex(c => c.id === id)
-    
-    if (index === -1) throw new Error('Case not found')
-
-    cases[index] = { ...cases[index], ...data, updatedAt: new Date().toISOString() }
-    setData(STORAGE_KEYS.cases, cases)
-
-    return cases[index]
+  async update(id: string, data: Partial<Case>): Promise<Case> {
+    const caseRef = doc(db, COLLECTIONS.cases, id)
+    await updateDoc(caseRef, { ...data, updatedAt: new Date().toISOString() })
+    const updated = await getDoc(caseRef)
+    return { id, ...updated.data() } as Case
   },
 
-  delete(id: string): void {
-    const cases = getData<Case>(STORAGE_KEYS.cases)
-    const filtered = cases.filter(c => c.id !== id)
-    setData(STORAGE_KEYS.cases, filtered)
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.cases, id))
   },
 }
 
-// ==================== TASKS ====================
+// ============================================
+// TASKS STORAGE
+// ============================================
 
 export const tasksStorage = {
-  getAll(params: Record<string, any> = {}): Task[] {
-    let tasks = getData<Task>(STORAGE_KEYS.tasks)
-    
-    if (params.assignedTo) {
-      tasks = tasks.filter(t => t.assignedTo === params.assignedTo)
-    }
+  async getAll(params: Record<string, any> = {}): Promise<Task[]> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.tasks))
+      let tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task))
+      
+      if (params.assignedTo) tasks = tasks.filter(t => t.assignedTo === params.assignedTo)
+      if (params.status) tasks = tasks.filter(t => t.status === params.status)
+      if (params.caseId) tasks = tasks.filter(t => t.caseId === params.caseId)
 
-    if (params.status) {
-      tasks = tasks.filter(t => t.status === params.status)
+      return tasks
+    } catch (error) {
+      console.error('Error getting tasks:', error)
+      return []
     }
-
-    if (params.caseId) {
-      tasks = tasks.filter(t => t.caseId === params.caseId)
-    }
-
-    return tasks
   },
 
-  create(data: Partial<Task>): Task {
-    const tasks = getData<Task>(STORAGE_KEYS.tasks)
-    
+  async create(data: Partial<Task>): Promise<Task> {
+    const taskId = generateId('task')
     const task: Task = {
-      id: generateId('task'),
+      id: taskId,
       title: data.title || '',
       assignedTo: data.assignedTo || '',
       dueDate: data.dueDate || new Date().toISOString(),
@@ -409,68 +538,56 @@ export const tasksStorage = {
       ...data,
     }
 
-    tasks.push(task)
-    setData(STORAGE_KEYS.tasks, tasks)
-
+    await setDoc(doc(db, COLLECTIONS.tasks, taskId), task)
     return task
   },
 
-  update(id: string, data: Partial<Task>): Task {
-    const tasks = getData<Task>(STORAGE_KEYS.tasks)
-    const index = tasks.findIndex(t => t.id === id)
-    
-    if (index === -1) throw new Error('Task not found')
-
-    tasks[index] = { ...tasks[index], ...data }
-    setData(STORAGE_KEYS.tasks, tasks)
-
-    return tasks[index]
+  async update(id: string, data: Partial<Task>): Promise<Task> {
+    const taskRef = doc(db, COLLECTIONS.tasks, id)
+    await updateDoc(taskRef, data)
+    const updated = await getDoc(taskRef)
+    return { id, ...updated.data() } as Task
   },
 
-  delete(id: string): void {
-    const tasks = getData<Task>(STORAGE_KEYS.tasks)
-    const filtered = tasks.filter(t => t.id !== id)
-    setData(STORAGE_KEYS.tasks, filtered)
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.tasks, id))
   },
 }
 
-// ==================== COURT LOGS ====================
+// ============================================
+// COURT LOGS STORAGE
+// ============================================
 
 export const courtLogsStorage = {
-  getAll(params: Record<string, any> = {}): { courtLogs: CourtLog[]; pagination: any } {
-    let logs = getData<CourtLog>(STORAGE_KEYS.courtLogs)
-    
-    if (params.clientId) {
-      logs = logs.filter(l => l.clientId === params.clientId)
-    }
+  async getAll(params: Record<string, any> = {}): Promise<{ courtLogs: CourtLog[]; pagination: any }> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.courtLogs))
+      let logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CourtLog))
+      
+      if (params.clientId) logs = logs.filter(l => l.clientId === params.clientId)
+      if (params.status) logs = logs.filter(l => l.status === params.status)
 
-    if (params.status) {
-      logs = logs.filter(l => l.status === params.status)
-    }
+      const total = logs.length
+      const page = parseInt(params.page) || 1
+      const limit = parseInt(params.limit) || 50
+      const offset = (page - 1) * limit
 
-    const total = logs.length
-    const page = parseInt(params.page) || 1
-    const limit = parseInt(params.limit) || 50
-    const offset = (page - 1) * limit
+      logs = logs.slice(offset, offset + limit)
 
-    logs = logs.slice(offset, offset + limit)
-
-    return {
-      courtLogs: logs,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+      return {
+        courtLogs: logs,
+        pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      }
+    } catch (error) {
+      console.error('Error getting court logs:', error)
+      return { courtLogs: [], pagination: { total: 0, page: 1, limit: 50, totalPages: 0 } }
     }
   },
 
-  create(data: Partial<CourtLog>): CourtLog {
-    const logs = getData<CourtLog>(STORAGE_KEYS.courtLogs)
-    
+  async create(data: Partial<CourtLog>): Promise<CourtLog> {
+    const logId = generateId('court')
     const log: CourtLog = {
-      id: generateId('court'),
+      id: logId,
       clientId: data.clientId || '',
       clientName: data.clientName || '',
       courtDate: data.courtDate || '',
@@ -487,66 +604,59 @@ export const courtLogsStorage = {
       ...data,
     }
 
-    logs.push(log)
-    setData(STORAGE_KEYS.courtLogs, logs)
-
+    await setDoc(doc(db, COLLECTIONS.courtLogs, logId), log)
     return log
   },
 
-  update(id: string, data: Partial<CourtLog>): CourtLog {
-    const logs = getData<CourtLog>(STORAGE_KEYS.courtLogs)
-    const index = logs.findIndex(l => l.id === id)
-    
-    if (index === -1) throw new Error('Court log not found')
-
-    logs[index] = { ...logs[index], ...data, updatedAt: new Date().toISOString() }
-    setData(STORAGE_KEYS.courtLogs, logs)
-
-    return logs[index]
+  async update(id: string, data: Partial<CourtLog>): Promise<CourtLog> {
+    const logRef = doc(db, COLLECTIONS.courtLogs, id)
+    await updateDoc(logRef, { ...data, updatedAt: new Date().toISOString() })
+    const updated = await getDoc(logRef)
+    return { id, ...updated.data() } as CourtLog
   },
 
-  delete(id: string): void {
-    const logs = getData<CourtLog>(STORAGE_KEYS.courtLogs)
-    const filtered = logs.filter(l => l.id !== id)
-    setData(STORAGE_KEYS.courtLogs, filtered)
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.courtLogs, id))
   },
 }
 
-// ==================== MESSAGES ====================
+// ============================================
+// MESSAGES STORAGE
+// ============================================
 
 export const messagesStorage = {
-  getAll(params: Record<string, any> = {}): { messages: Message[]; pagination: any } {
-    let messages = getData<Message>(STORAGE_KEYS.messages)
-    
-    if (params.userId) {
-      messages = messages.filter(m => 
-        m.fromUserId === params.userId || m.toUserIds.includes(params.userId)
-      )
-    }
+  async getAll(params: Record<string, any> = {}): Promise<{ messages: Message[]; pagination: any }> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.messages))
+      let messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message))
+      
+      if (params.userId) {
+        messages = messages.filter(m => 
+          m.fromUserId === params.userId || m.toUserIds.includes(params.userId)
+        )
+      }
 
-    const total = messages.length
-    const page = parseInt(params.page) || 1
-    const limit = parseInt(params.limit) || 50
-    const offset = (page - 1) * limit
+      const total = messages.length
+      const page = parseInt(params.page) || 1
+      const limit = parseInt(params.limit) || 50
+      const offset = (page - 1) * limit
 
-    messages = messages.slice(offset, offset + limit)
+      messages = messages.slice(offset, offset + limit)
 
-    return {
-      messages,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+      return {
+        messages,
+        pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      }
+    } catch (error) {
+      console.error('Error getting messages:', error)
+      return { messages: [], pagination: { total: 0, page: 1, limit: 50, totalPages: 0 } }
     }
   },
 
-  create(data: Partial<Message>): Message {
-    const messages = getData<Message>(STORAGE_KEYS.messages)
-    
+  async create(data: Partial<Message>): Promise<Message> {
+    const msgId = generateId('msg')
     const message: Message = {
-      id: generateId('msg'),
+      id: msgId,
       subject: data.subject || '',
       content: data.content || '',
       fromUserId: data.fromUserId || '',
@@ -556,48 +666,40 @@ export const messagesStorage = {
       ...data,
     }
 
-    messages.push(message)
-    setData(STORAGE_KEYS.messages, messages)
-
+    await setDoc(doc(db, COLLECTIONS.messages, msgId), message)
     return message
   },
 
-  markAsRead(id: string): void {
-    const messages = getData<Message>(STORAGE_KEYS.messages)
-    const index = messages.findIndex(m => m.id === id)
-    if (index !== -1) {
-      messages[index].read = true
-      setData(STORAGE_KEYS.messages, messages)
-    }
+  async markAsRead(id: string): Promise<void> {
+    await updateDoc(doc(db, COLLECTIONS.messages, id), { read: true })
   },
 }
 
-// ==================== TIME ENTRIES ====================
+// ============================================
+// TIME ENTRIES STORAGE
+// ============================================
 
 export const timeEntriesStorage = {
-  getAll(params: Record<string, any> = {}): TimeEntry[] {
-    let entries = getData<TimeEntry>(STORAGE_KEYS.timeEntries)
-    
-    if (params.caseId) {
-      entries = entries.filter(e => e.caseId === params.caseId)
-    }
+  async getAll(params: Record<string, any> = {}): Promise<TimeEntry[]> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.timeEntries))
+      let entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeEntry))
+      
+      if (params.caseId) entries = entries.filter(e => e.caseId === params.caseId)
+      if (params.clientId) entries = entries.filter(e => e.clientId === params.clientId)
+      if (params.userId) entries = entries.filter(e => e.userId === params.userId)
 
-    if (params.clientId) {
-      entries = entries.filter(e => e.clientId === params.clientId)
+      return entries
+    } catch (error) {
+      console.error('Error getting time entries:', error)
+      return []
     }
-
-    if (params.userId) {
-      entries = entries.filter(e => e.userId === params.userId)
-    }
-
-    return entries
   },
 
-  create(data: Partial<TimeEntry>): TimeEntry {
-    const entries = getData<TimeEntry>(STORAGE_KEYS.timeEntries)
-    
+  async create(data: Partial<TimeEntry>): Promise<TimeEntry> {
+    const entryId = generateId('time')
     const entry: TimeEntry = {
-      id: generateId('time'),
+      id: entryId,
       caseId: data.caseId || '',
       clientId: data.clientId || '',
       userId: data.userId || '',
@@ -610,53 +712,46 @@ export const timeEntriesStorage = {
       ...data,
     }
 
-    entries.push(entry)
-    setData(STORAGE_KEYS.timeEntries, entries)
-
+    await setDoc(doc(db, COLLECTIONS.timeEntries, entryId), entry)
     return entry
   },
 
-  update(id: string, data: Partial<TimeEntry>): TimeEntry {
-    const entries = getData<TimeEntry>(STORAGE_KEYS.timeEntries)
-    const index = entries.findIndex(e => e.id === id)
-    
-    if (index === -1) throw new Error('Time entry not found')
-
-    entries[index] = { ...entries[index], ...data }
-    setData(STORAGE_KEYS.timeEntries, entries)
-
-    return entries[index]
+  async update(id: string, data: Partial<TimeEntry>): Promise<TimeEntry> {
+    const entryRef = doc(db, COLLECTIONS.timeEntries, id)
+    await updateDoc(entryRef, data)
+    const updated = await getDoc(entryRef)
+    return { id, ...updated.data() } as TimeEntry
   },
 
-  delete(id: string): void {
-    const entries = getData<TimeEntry>(STORAGE_KEYS.timeEntries)
-    const filtered = entries.filter(e => e.id !== id)
-    setData(STORAGE_KEYS.timeEntries, filtered)
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.timeEntries, id))
   },
 }
 
-// ==================== INVOICES ====================
+// ============================================
+// INVOICES STORAGE
+// ============================================
 
 export const invoicesStorage = {
-  getAll(params: Record<string, any> = {}): Invoice[] {
-    let invoices = getData<Invoice>(STORAGE_KEYS.invoices)
-    
-    if (params.clientId) {
-      invoices = invoices.filter(i => i.clientId === params.clientId)
-    }
+  async getAll(params: Record<string, any> = {}): Promise<Invoice[]> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.invoices))
+      let invoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice))
+      
+      if (params.clientId) invoices = invoices.filter(i => i.clientId === params.clientId)
+      if (params.status) invoices = invoices.filter(i => i.status === params.status)
 
-    if (params.status) {
-      invoices = invoices.filter(i => i.status === params.status)
+      return invoices
+    } catch (error) {
+      console.error('Error getting invoices:', error)
+      return []
     }
-
-    return invoices
   },
 
-  create(data: Partial<Invoice>): Invoice {
-    const invoices = getData<Invoice>(STORAGE_KEYS.invoices)
-    
+  async create(data: Partial<Invoice>): Promise<Invoice> {
+    const invId = generateId('inv')
     const invoice: Invoice = {
-      id: generateId('inv'),
+      id: invId,
       invoiceNumber: data.invoiceNumber || `INV-${Date.now()}`,
       clientId: data.clientId || '',
       timeEntryIds: data.timeEntryIds || [],
@@ -670,50 +765,61 @@ export const invoicesStorage = {
       ...data,
     }
 
-    invoices.push(invoice)
-    setData(STORAGE_KEYS.invoices, invoices)
-
+    await setDoc(doc(db, COLLECTIONS.invoices, invId), invoice)
     return invoice
   },
 
-  update(id: string, data: Partial<Invoice>): Invoice {
-    const invoices = getData<Invoice>(STORAGE_KEYS.invoices)
-    const index = invoices.findIndex(i => i.id === id)
-    
-    if (index === -1) throw new Error('Invoice not found')
-
-    invoices[index] = { ...invoices[index], ...data }
-    setData(STORAGE_KEYS.invoices, invoices)
-
-    return invoices[index]
+  async update(id: string, data: Partial<Invoice>): Promise<Invoice> {
+    const invRef = doc(db, COLLECTIONS.invoices, id)
+    await updateDoc(invRef, data)
+    const updated = await getDoc(invRef)
+    return { id, ...updated.data() } as Invoice
   },
 
-  delete(id: string): void {
-    const invoices = getData<Invoice>(STORAGE_KEYS.invoices)
-    const filtered = invoices.filter(i => i.id !== id)
-    setData(STORAGE_KEYS.invoices, filtered)
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.invoices, id))
   },
 }
 
-// ==================== DASHBOARD STATS ====================
+// ============================================
+// DASHBOARD STATS
+// ============================================
 
 export const dashboardStorage = {
-  getStats() {
-    const clients = getData<Client>(STORAGE_KEYS.clients)
-    const cases = getData<Case>(STORAGE_KEYS.cases)
-    const tasks = getData<Task>(STORAGE_KEYS.tasks)
-    const invoices = getData<Invoice>(STORAGE_KEYS.invoices)
+  async getStats() {
+    try {
+      const [clientsSnap, casesSnap, tasksSnap, invoicesSnap] = await Promise.all([
+        getDocs(collection(db, COLLECTIONS.clients)),
+        getDocs(collection(db, COLLECTIONS.cases)),
+        getDocs(collection(db, COLLECTIONS.tasks)),
+        getDocs(collection(db, COLLECTIONS.invoices)),
+      ])
 
-    return {
-      totalClients: clients.length,
-      activeCases: cases.filter(c => c.status === 'Open' || c.status === 'Pending').length,
-      pendingTasks: tasks.filter(t => t.status !== 'Completed').length,
-      unpaidInvoices: invoices.filter(i => i.status !== 'Paid').length,
-      recentCases: cases.slice(-5).reverse(),
-      upcomingTasks: tasks
-        .filter(t => t.status !== 'Completed')
-        .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-        .slice(0, 5),
+      const cases = casesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Case))
+      const tasks = tasksSnap.docs.map(d => ({ id: d.id, ...d.data() } as Task))
+      const invoices = invoicesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice))
+
+      return {
+        totalClients: clientsSnap.size,
+        activeCases: cases.filter(c => c.status === 'Open' || c.status === 'Pending').length,
+        pendingTasks: tasks.filter(t => t.status !== 'Completed').length,
+        unpaidInvoices: invoices.filter(i => i.status !== 'Paid').length,
+        recentCases: cases.slice(-5).reverse(),
+        upcomingTasks: tasks
+          .filter(t => t.status !== 'Completed')
+          .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+          .slice(0, 5),
+      }
+    } catch (error) {
+      console.error('Error getting dashboard stats:', error)
+      return {
+        totalClients: 0,
+        activeCases: 0,
+        pendingTasks: 0,
+        unpaidInvoices: 0,
+        recentCases: [],
+        upcomingTasks: [],
+      }
     }
   },
 }

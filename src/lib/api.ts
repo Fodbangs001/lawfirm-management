@@ -1,5 +1,6 @@
 // ============================================
-// API CLIENT - Static localStorage Implementation
+// API CLIENT - Firebase Cloud Database Implementation
+// Data syncs across ALL browsers and devices
 // ============================================
 
 import {
@@ -31,50 +32,31 @@ class ApiClient {
     }
   }
 
-  // Simulate async behavior for compatibility
-  private async delay<T>(fn: () => T): Promise<T> {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        try {
-          resolve(fn())
-        } catch (error) {
-          reject(error)
-        }
-      }, 50) // Small delay to simulate network
-    })
-  }
-
   // Auth
   async login(email: string, password: string) {
-    return this.delay(() => {
-      const result = authStorage.login(email, password)
-      if (!result) {
-        throw new Error('Invalid credentials')
-      }
-      this.setToken(result.token)
-      return result
-    })
+    const result = await authStorage.login(email, password)
+    if (!result) {
+      throw new Error('Invalid credentials')
+    }
+    this.setToken(result.token)
+    return result
   }
 
   async register(name: string, email: string, password: string, role: string) {
-    return this.delay(() => {
-      const result = authStorage.register(name, email, password, role)
-      if (!result) {
-        throw new Error('Registration failed')
-      }
-      this.setToken(result.token)
-      return result
-    })
+    const result = await authStorage.register(name, email, password, role)
+    if (!result) {
+      throw new Error('Registration failed')
+    }
+    this.setToken(result.token)
+    return result
   }
 
   async getMe() {
-    return this.delay(() => {
-      const user = authStorage.getCurrentUser()
-      if (!user) {
-        throw new Error('Not authenticated')
-      }
-      return { user }
-    })
+    const user = authStorage.getCurrentUser()
+    if (!user) {
+      throw new Error('Not authenticated')
+    }
+    return { user }
   }
 
   logout() {
@@ -84,170 +66,157 @@ class ApiClient {
 
   // Users
   async getUsers() {
-    return this.delay(() => usersStorage.getAll())
+    return usersStorage.getAll()
   }
 
   async createUser(data: { name: string; email: string; password: string; role: string }) {
-    return this.delay(() => usersStorage.create(data))
+    return usersStorage.create(data)
   }
 
   async updateUser(id: string, data: any) {
-    return this.delay(() => usersStorage.update(id, data))
+    return usersStorage.update(id, data)
   }
 
   async deleteUser(id: string) {
-    return this.delay(() => {
-      usersStorage.delete(id)
-      return { success: true }
-    })
+    await usersStorage.delete(id)
+    return { success: true }
   }
 
   // Clients
   async getClients(params: Record<string, any> = {}) {
-    return this.delay(() => clientsStorage.getAll(params))
+    return clientsStorage.getAll(params)
   }
 
   async createClient(data: any) {
-    return this.delay(() => clientsStorage.create(data))
+    return clientsStorage.create(data)
   }
 
   async updateClient(id: string, data: any) {
-    return this.delay(() => clientsStorage.update(id, data))
+    return clientsStorage.update(id, data)
   }
 
   async deleteClient(id: string) {
-    return this.delay(() => {
-      clientsStorage.delete(id)
-      return { success: true }
-    })
+    await clientsStorage.delete(id)
+    return { success: true }
   }
 
   // Cases
   async getCases(params: Record<string, any> = {}) {
-    return this.delay(() => casesStorage.getAll(params))
+    return casesStorage.getAll(params)
   }
 
   async createCase(data: any) {
-    return this.delay(() => casesStorage.create(data))
+    return casesStorage.create(data)
   }
 
   async updateCase(id: string, data: any) {
-    return this.delay(() => casesStorage.update(id, data))
+    return casesStorage.update(id, data)
   }
 
   async deleteCase(id: string) {
-    return this.delay(() => {
-      casesStorage.delete(id)
-      return { success: true }
-    })
+    await casesStorage.delete(id)
+    return { success: true }
   }
 
   // Tasks
   async getTasks(params: Record<string, any> = {}) {
-    return this.delay(() => tasksStorage.getAll(params))
+    return tasksStorage.getAll(params)
   }
 
   async createTask(data: any) {
-    return this.delay(() => tasksStorage.create(data))
+    return tasksStorage.create(data)
   }
 
   async updateTask(id: string, data: any) {
-    return this.delay(() => tasksStorage.update(id, data))
+    return tasksStorage.update(id, data)
   }
 
   async deleteTask(id: string) {
-    return this.delay(() => {
-      tasksStorage.delete(id)
-      return { success: true }
-    })
+    await tasksStorage.delete(id)
+    return { success: true }
   }
 
   // Court Logs
   async getCourtLogs(params: Record<string, any> = {}) {
-    return this.delay(() => courtLogsStorage.getAll(params))
+    return courtLogsStorage.getAll(params)
   }
 
   async createCourtLog(data: any) {
-    return this.delay(() => courtLogsStorage.create(data))
+    return courtLogsStorage.create(data)
   }
 
   async updateCourtLog(id: string, data: any) {
-    return this.delay(() => courtLogsStorage.update(id, data))
+    return courtLogsStorage.update(id, data)
   }
 
   async deleteCourtLog(id: string) {
-    return this.delay(() => {
-      courtLogsStorage.delete(id)
-      return { success: true }
-    })
+    await courtLogsStorage.delete(id)
+    return { success: true }
   }
 
   // Appointments (alias for court logs for compatibility)
   async getAppointments(params: Record<string, any> = {}) {
-    return this.delay(() => courtLogsStorage.getAll(params).courtLogs)
+    const result = await courtLogsStorage.getAll(params)
+    return result.courtLogs
   }
 
   async createAppointment(data: any) {
-    return this.delay(() => courtLogsStorage.create(data))
+    return courtLogsStorage.create(data)
   }
 
   // Messages
   async getMessages(params: Record<string, any> = {}) {
-    return this.delay(() => messagesStorage.getAll(params))
+    return messagesStorage.getAll(params)
   }
 
   async createMessage(data: any) {
-    return this.delay(() => messagesStorage.create(data))
+    return messagesStorage.create(data)
   }
 
   // Time Entries
   async getTimeEntries(params: Record<string, any> = {}) {
-    return this.delay(() => timeEntriesStorage.getAll(params))
+    return timeEntriesStorage.getAll(params)
   }
 
   async createTimeEntry(data: any) {
-    return this.delay(() => timeEntriesStorage.create(data))
+    return timeEntriesStorage.create(data)
   }
 
   async updateTimeEntry(id: string, data: any) {
-    return this.delay(() => timeEntriesStorage.update(id, data))
+    return timeEntriesStorage.update(id, data)
   }
 
   async deleteTimeEntry(id: string) {
-    return this.delay(() => {
-      timeEntriesStorage.delete(id)
-      return { success: true }
-    })
+    await timeEntriesStorage.delete(id)
+    return { success: true }
   }
 
   // Invoices
   async getInvoices(params: Record<string, any> = {}) {
-    return this.delay(() => invoicesStorage.getAll(params))
+    return invoicesStorage.getAll(params)
   }
 
   async createInvoice(data: any) {
-    return this.delay(() => invoicesStorage.create(data))
+    return invoicesStorage.create(data)
   }
 
   async updateInvoice(id: string, data: any) {
-    return this.delay(() => invoicesStorage.update(id, data))
+    return invoicesStorage.update(id, data)
   }
 
   async deleteInvoice(id: string) {
-    return this.delay(() => {
-      invoicesStorage.delete(id)
-      return { success: true }
-    })
+    await invoicesStorage.delete(id)
+    return { success: true }
   }
 
   // Dashboard
   async getDashboardStats() {
-    return this.delay(() => dashboardStorage.getStats())
+    return dashboardStorage.getStats()
   }
 
-  // Health check (always healthy for static)
+  // Health check
   async health() {
-    return { status: 'ok', mode: 'static' }
+    return { status: 'ok', mode: 'firebase' }
   }
 }
 
