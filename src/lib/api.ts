@@ -1,8 +1,19 @@
 // ============================================
-// API CLIENT - Clean Implementation
+// API CLIENT - Static localStorage Implementation
 // ============================================
 
-const API_URL = '/api'
+import {
+  authStorage,
+  usersStorage,
+  clientsStorage,
+  casesStorage,
+  tasksStorage,
+  courtLogsStorage,
+  messagesStorage,
+  timeEntriesStorage,
+  invoicesStorage,
+  dashboardStorage,
+} from './storage'
 
 class ApiClient {
   private token: string | null = null
@@ -20,238 +31,224 @@ class ApiClient {
     }
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...options.headers as Record<string, string>,
-    }
-
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`
-    }
-
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      ...options,
-      headers,
+  // Simulate async behavior for compatibility
+  private async delay<T>(fn: () => T): Promise<T> {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          resolve(fn())
+        } catch (error) {
+          reject(error)
+        }
+      }, 50) // Small delay to simulate network
     })
-
-    if (!response.ok) {
-      let errorMessage = `HTTP error ${response.status}`
-      try {
-        const error = await response.json()
-        errorMessage = error.error || error.message || errorMessage
-      } catch {
-        // Could not parse JSON, use status text
-        errorMessage = response.statusText || errorMessage
-      }
-      console.error('API Error:', response.status, errorMessage)
-      throw new Error(errorMessage)
-    }
-
-    return response.json()
   }
 
   // Auth
   async login(email: string, password: string) {
-    const data = await this.request<{ user: any; token: string }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
+    return this.delay(() => {
+      const result = authStorage.login(email, password)
+      if (!result) {
+        throw new Error('Invalid credentials')
+      }
+      this.setToken(result.token)
+      return result
     })
-    this.setToken(data.token)
-    return data
   }
 
   async register(name: string, email: string, password: string, role: string) {
-    const data = await this.request<{ user: any; token: string }>('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ name, email, password, role }),
+    return this.delay(() => {
+      const result = authStorage.register(name, email, password, role)
+      if (!result) {
+        throw new Error('Registration failed')
+      }
+      this.setToken(result.token)
+      return result
     })
-    this.setToken(data.token)
-    return data
   }
 
   async getMe() {
-    return this.request<{ user: any }>('/auth/me')
+    return this.delay(() => {
+      const user = authStorage.getCurrentUser()
+      if (!user) {
+        throw new Error('Not authenticated')
+      }
+      return { user }
+    })
   }
 
   logout() {
+    authStorage.logout()
     this.setToken(null)
-  }
-
-  // Clients
-  async getClients(params: Record<string, any> = {}) {
-    const query = new URLSearchParams(params).toString()
-    return this.request<{ clients: any[]; pagination: any }>(`/clients?${query}`)
-  }
-
-  async createClient(data: any) {
-    return this.request<any>('/clients', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async updateClient(id: string, data: any) {
-    return this.request<any>(`/clients/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async deleteClient(id: string) {
-    return this.request<any>(`/clients/${id}`, { method: 'DELETE' })
   }
 
   // Users
   async getUsers() {
-    return this.request<any[]>('/users')
+    return this.delay(() => usersStorage.getAll())
   }
 
   async createUser(data: { name: string; email: string; password: string; role: string }) {
-    return this.request<any>('/users', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
+    return this.delay(() => usersStorage.create(data))
   }
 
   async updateUser(id: string, data: any) {
-    return this.request<any>(`/users/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
+    return this.delay(() => usersStorage.update(id, data))
   }
 
   async deleteUser(id: string) {
-    return this.request<any>(`/users/${id}`, { method: 'DELETE' })
+    return this.delay(() => {
+      usersStorage.delete(id)
+      return { success: true }
+    })
+  }
+
+  // Clients
+  async getClients(params: Record<string, any> = {}) {
+    return this.delay(() => clientsStorage.getAll(params))
+  }
+
+  async createClient(data: any) {
+    return this.delay(() => clientsStorage.create(data))
+  }
+
+  async updateClient(id: string, data: any) {
+    return this.delay(() => clientsStorage.update(id, data))
+  }
+
+  async deleteClient(id: string) {
+    return this.delay(() => {
+      clientsStorage.delete(id)
+      return { success: true }
+    })
   }
 
   // Cases
   async getCases(params: Record<string, any> = {}) {
-    const query = new URLSearchParams(params).toString()
-    return this.request<{ cases: any[]; pagination: any }>(`/cases?${query}`)
+    return this.delay(() => casesStorage.getAll(params))
   }
 
   async createCase(data: any) {
-    return this.request<any>('/cases', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
+    return this.delay(() => casesStorage.create(data))
   }
 
   async updateCase(id: string, data: any) {
-    return this.request<any>(`/cases/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
+    return this.delay(() => casesStorage.update(id, data))
   }
 
   async deleteCase(id: string) {
-    return this.request<any>(`/cases/${id}`, { method: 'DELETE' })
+    return this.delay(() => {
+      casesStorage.delete(id)
+      return { success: true }
+    })
   }
 
   // Tasks
   async getTasks(params: Record<string, any> = {}) {
-    const query = new URLSearchParams(params).toString()
-    return this.request<any[]>(`/tasks?${query}`)
+    return this.delay(() => tasksStorage.getAll(params))
   }
 
   async createTask(data: any) {
-    return this.request<any>('/tasks', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
+    return this.delay(() => tasksStorage.create(data))
   }
 
   async updateTask(id: string, data: any) {
-    return this.request<any>(`/tasks/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
+    return this.delay(() => tasksStorage.update(id, data))
   }
 
   async deleteTask(id: string) {
-    return this.request<any>(`/tasks/${id}`, { method: 'DELETE' })
+    return this.delay(() => {
+      tasksStorage.delete(id)
+      return { success: true }
+    })
   }
 
-  // Appointments
+  // Court Logs
+  async getCourtLogs(params: Record<string, any> = {}) {
+    return this.delay(() => courtLogsStorage.getAll(params))
+  }
+
+  async createCourtLog(data: any) {
+    return this.delay(() => courtLogsStorage.create(data))
+  }
+
+  async updateCourtLog(id: string, data: any) {
+    return this.delay(() => courtLogsStorage.update(id, data))
+  }
+
+  async deleteCourtLog(id: string) {
+    return this.delay(() => {
+      courtLogsStorage.delete(id)
+      return { success: true }
+    })
+  }
+
+  // Appointments (alias for court logs for compatibility)
   async getAppointments(params: Record<string, any> = {}) {
-    const query = new URLSearchParams(params).toString()
-    return this.request<any[]>(`/appointments?${query}`)
+    return this.delay(() => courtLogsStorage.getAll(params).courtLogs)
   }
 
   async createAppointment(data: any) {
-    return this.request<any>('/appointments', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
+    return this.delay(() => courtLogsStorage.create(data))
   }
 
   // Messages
   async getMessages(params: Record<string, any> = {}) {
-    const query = new URLSearchParams(params).toString()
-    return this.request<{ messages: any[]; pagination: any }>(`/messages?${query}`)
+    return this.delay(() => messagesStorage.getAll(params))
   }
 
   async createMessage(data: any) {
-    return this.request<any>('/messages', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
+    return this.delay(() => messagesStorage.create(data))
   }
 
   // Time Entries
   async getTimeEntries(params: Record<string, any> = {}) {
-    const query = new URLSearchParams(params).toString()
-    return this.request<any[]>(`/time-entries?${query}`)
+    return this.delay(() => timeEntriesStorage.getAll(params))
   }
 
   async createTimeEntry(data: any) {
-    return this.request<any>('/time-entries', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
+    return this.delay(() => timeEntriesStorage.create(data))
   }
 
   async updateTimeEntry(id: string, data: any) {
-    return this.request<any>(`/time-entries/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
+    return this.delay(() => timeEntriesStorage.update(id, data))
   }
 
   async deleteTimeEntry(id: string) {
-    return this.request<any>(`/time-entries/${id}`, { method: 'DELETE' })
+    return this.delay(() => {
+      timeEntriesStorage.delete(id)
+      return { success: true }
+    })
   }
 
   // Invoices
   async getInvoices(params: Record<string, any> = {}) {
-    const query = new URLSearchParams(params).toString()
-    return this.request<any[]>(`/invoices?${query}`)
+    return this.delay(() => invoicesStorage.getAll(params))
   }
 
   async createInvoice(data: any) {
-    return this.request<any>('/invoices', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
+    return this.delay(() => invoicesStorage.create(data))
   }
 
   async updateInvoice(id: string, data: any) {
-    return this.request<any>(`/invoices/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
+    return this.delay(() => invoicesStorage.update(id, data))
   }
 
   async deleteInvoice(id: string) {
-    return this.request<any>(`/invoices/${id}`, { method: 'DELETE' })
+    return this.delay(() => {
+      invoicesStorage.delete(id)
+      return { success: true }
+    })
   }
 
-  // Health
+  // Dashboard
+  async getDashboardStats() {
+    return this.delay(() => dashboardStorage.getStats())
+  }
+
+  // Health check (always healthy for static)
   async health() {
-    return fetch(`${API_URL.replace('/api', '')}/health`).then(r => r.json())
+    return { status: 'ok', mode: 'static' }
   }
 }
 
 export const api = new ApiClient()
-

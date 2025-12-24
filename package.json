@@ -1,9 +1,9 @@
 {
-  "name": "lawfirm-management-clean",
+  "name": "lawfirm-management-static",
   "private": true,
-  "version": "2.0.0",
+  "version": "3.0.0",
   "type": "module",
-  "description": "Law Firm Management System - Clean Build",
+  "description": "Law Firm Management System - Static Build (No Backend Required)",
   "author": "Law Firm",
   "license": "MIT",
   "engines": {
@@ -11,16 +11,11 @@
   },
   "scripts": {
     "dev": "vite --port 5001",
-    "dev:server": "cd server && node server.js",
-    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
-    "server": "cd server && npm start",
     "build": "tsc -b && vite build",
-    "preview": "vite preview",
+    "preview": "vite preview --port 5001",
     "lint": "eslint .",
     "test": "vitest",
-    "start": "node server.cjs",
-    "start:dev": "npm run dev:all",
-    "postinstall": "npm run build"
+    "start": "vite preview --port 5001"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.6",
