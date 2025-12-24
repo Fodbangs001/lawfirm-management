@@ -19,7 +19,8 @@
     "lint": "eslint .",
     "test": "vitest",
     "start": "node server.cjs",
-    "start:dev": "npm run dev:all"
+    "start:dev": "npm run dev:all",
+    "postinstall": "npm run build"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.6",
