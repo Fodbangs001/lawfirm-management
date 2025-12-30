@@ -100,6 +100,19 @@ class ApiClient {
     return { success: true }
   }
 
+  async restoreClient(id: string) {
+    return clientsStorage.restore(id)
+  }
+
+  async getDeletedClients() {
+    return clientsStorage.getDeleted()
+  }
+
+  async permanentDeleteClient(id: string) {
+    await clientsStorage.permanentDelete(id)
+    return { success: true }
+  }
+
   // Cases
   async getCases(params: Record<string, any> = {}) {
     return casesStorage.getAll(params)
@@ -115,6 +128,19 @@ class ApiClient {
 
   async deleteCase(id: string) {
     await casesStorage.delete(id)
+    return { success: true }
+  }
+
+  async restoreCase(id: string) {
+    return casesStorage.restore(id)
+  }
+
+  async getDeletedCases() {
+    return casesStorage.getDeleted()
+  }
+
+  async permanentDeleteCase(id: string) {
+    await casesStorage.permanentDelete(id)
     return { success: true }
   }
 

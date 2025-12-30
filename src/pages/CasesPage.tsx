@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
 import { Case, Client, User } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Search, Edit, Trash2, Briefcase, FileText, FileDown, MoreVertical } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Briefcase, FileText, FileDown, MoreVertical, RotateCcw, Trash, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { exportToExcel, formatCasesForExport } from '@/lib/excel-export'
 import {
@@ -49,6 +49,28 @@ export function CasesPage({ cases, clients, users, onRefresh }: CasesPageProps) 
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [isLoading, setIsLoading] = useState(false)
+  const [showTrash, setShowTrash] = useState(false)
+  const [deletedCases, setDeletedCases] = useState<Case[]>([])
+  const [isTrashLoading, setIsTrashLoading] = useState(false)
+
+  // Load deleted cases when trash view is opened
+  useEffect(() => {
+    if (showTrash) {
+      loadDeletedCases()
+    }
+  }, [showTrash])
+
+  const loadDeletedCases = async () => {
+    setIsTrashLoading(true)
+    try {
+      const deleted = await api.getDeletedCases()
+      setDeletedCases(deleted)
+    } catch (error) {
+      toast.error('Failed to load deleted cases')
+    } finally {
+      setIsTrashLoading(false)
+    }
+  }
 
   // Form state
   const [formData, setFormData] = useState({
@@ -124,15 +146,49 @@ export function CasesPage({ cases, clients, users, onRefresh }: CasesPageProps) 
   }
 
   const handleDelete = async (caseItem: Case) => {
-    if (!confirm(`Are you sure you want to delete "${caseItem.title}"?`)) return
+    if (!confirm(`Are you sure you want to delete "${caseItem.title}"? It will be moved to trash for 30 days.`)) return
 
     try {
       await api.deleteCase(caseItem.id)
-      toast.success('Case deleted')
+      toast.success('Case moved to trash. You can restore it within 30 days.')
       onRefresh()
     } catch (error: any) {
       toast.error(error.message || 'Delete failed')
     }
+  }
+
+  const handleRestore = async (caseItem: Case) => {
+    try {
+      await api.restoreCase(caseItem.id)
+      toast.success('Case restored successfully')
+      loadDeletedCases()
+      onRefresh()
+    } catch (error: any) {
+      toast.error(error.message || 'Restore failed')
+    }
+  }
+
+  const handlePermanentDelete = async (caseItem: Case) => {
+    if (!confirm(`Are you sure you want to permanently delete "${caseItem.title}"? This action cannot be undone!`)) return
+
+    try {
+      await api.permanentDeleteCase(caseItem.id)
+      toast.success('Case permanently deleted')
+      loadDeletedCases()
+    } catch (error: any) {
+      toast.error(error.message || 'Delete failed')
+    }
+  }
+
+  // Calculate days remaining for deleted case
+  const getDaysRemaining = (deletedAt: string) => {
+    const deleted = new Date(deletedAt)
+    const expiry = new Date(deleted)
+    expiry.setDate(expiry.getDate() + 30)
+    const now = new Date()
+    const diffTime = expiry.getTime() - now.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return Math.max(0, diffDays)
   }
 
   // Export cases to Excel
@@ -154,31 +210,104 @@ export function CasesPage({ cases, clients, users, onRefresh }: CasesPageProps) 
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Cases</h1>
-          <p className="text-muted-foreground">Manage your legal cases</p>
+          <h1 className="text-3xl font-bold">{showTrash ? 'Deleted Cases' : 'Cases'}</h1>
+          <p className="text-muted-foreground">
+            {showTrash ? 'Restore or permanently delete cases (auto-deleted after 30 days)' : 'Manage your legal cases'}
+          </p>
         </div>
         <div className="flex gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleExportCases}>
-                <FileDown className="h-4 w-4 mr-2" />
-                Export to Excel
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button onClick={openCreateDialog}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Case
+          <Button 
+            variant={showTrash ? "default" : "outline"} 
+            onClick={() => setShowTrash(!showTrash)}
+          >
+            {showTrash ? (
+              <>
+                <Briefcase className="mr-2 h-4 w-4" />
+                View Active Cases
+              </>
+            ) : (
+              <>
+                <Trash className="mr-2 h-4 w-4" />
+                View Trash ({deletedCases.length || '...'})
+              </>
+            )}
           </Button>
+          {!showTrash && (
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportCases}>
+                    <FileDown className="h-4 w-4 mr-2" />
+                    Export to Excel
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button onClick={openCreateDialog}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Case
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Search and Filters */}
+      {/* Trash View */}
+      {showTrash ? (
+        <div className="space-y-4">
+          {isTrashLoading ? (
+            <div className="text-center py-12 text-muted-foreground">Loading deleted cases...</div>
+          ) : deletedCases.length === 0 ? (
+            <Card className="p-12 text-center">
+              <Trash className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium">Trash is empty</h3>
+              <p className="text-muted-foreground">Deleted cases will appear here for 30 days before being permanently removed.</p>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {deletedCases.map((caseItem: any) => (
+                <Card key={caseItem.id} className="hover:shadow-lg transition-shadow border-destructive/30">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-full bg-destructive/10">
+                          <Briefcase className="h-5 w-5 text-destructive" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base line-through opacity-70">{caseItem.title}</CardTitle>
+                          <p className="text-sm text-muted-foreground">{caseItem.caseNumber}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2 text-sm text-amber-500 mb-3">
+                      <Clock className="h-4 w-4" />
+                      <span>{getDaysRemaining(caseItem.deletedAt)} days remaining</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="flex-1" onClick={() => handleRestore(caseItem)}>
+                        <RotateCcw className="h-4 w-4 mr-1" />
+                        Restore
+                      </Button>
+                      <Button size="sm" variant="destructive" className="flex-1" onClick={() => handlePermanentDelete(caseItem)}>
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete Forever
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Search and Filters */}
       <div className="flex flex-wrap gap-4">
         <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -387,6 +516,8 @@ export function CasesPage({ cases, clients, users, onRefresh }: CasesPageProps) 
           </form>
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </div>
   )
 }

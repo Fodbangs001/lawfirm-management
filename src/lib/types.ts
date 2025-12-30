@@ -32,6 +32,7 @@ export interface Client {
   type: 'Individual' | 'Corporate'
   notes?: string
   createdAt: string
+  deletedAt?: string | null  // Soft delete - null means active, date means in trash
 }
 
 export interface Case {
@@ -45,6 +46,7 @@ export interface Case {
   description?: string
   createdAt: string
   updatedAt: string
+  deletedAt?: string | null  // Soft delete - null means active, date means in trash
 }
 
 export interface CourtLog {

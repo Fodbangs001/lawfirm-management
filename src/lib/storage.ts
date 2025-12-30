@@ -363,6 +363,11 @@ export const clientsStorage = {
       const snapshot = await getDocs(collection(db, COLLECTIONS.clients))
       let clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client))
       
+      // Filter out deleted clients (unless viewing trash)
+      if (!params.includeDeleted) {
+        clients = clients.filter(c => !c.deletedAt)
+      }
+      
       // Search filter
       if (params.search) {
         const search = params.search.toLowerCase()
@@ -430,7 +435,53 @@ export const clientsStorage = {
   },
 
   async delete(id: string): Promise<void> {
+    // Soft delete - move to trash
+    const clientRef = doc(db, COLLECTIONS.clients, id)
+    await updateDoc(clientRef, { deletedAt: new Date().toISOString() })
+  },
+
+  async restore(id: string): Promise<Client> {
+    const clientRef = doc(db, COLLECTIONS.clients, id)
+    await updateDoc(clientRef, { deletedAt: null })
+    const restored = await getDoc(clientRef)
+    return { id, ...restored.data() } as Client
+  },
+
+  async getDeleted(): Promise<Client[]> {
+    const snapshot = await getDocs(collection(db, COLLECTIONS.clients))
+    const clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client))
+    // Filter only deleted clients within last 30 days
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    return clients.filter(c => {
+      if (!c.deletedAt) return false
+      const deletedDate = new Date(c.deletedAt)
+      return deletedDate > thirtyDaysAgo
+    })
+  },
+
+  async permanentDelete(id: string): Promise<void> {
     await deleteDoc(doc(db, COLLECTIONS.clients, id))
+  },
+
+  async cleanupExpired(): Promise<number> {
+    // Delete clients that have been in trash for more than 30 days
+    const snapshot = await getDocs(collection(db, COLLECTIONS.clients))
+    const clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client))
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    
+    let count = 0
+    for (const client of clients) {
+      if (client.deletedAt) {
+        const deletedDate = new Date(client.deletedAt)
+        if (deletedDate <= thirtyDaysAgo) {
+          await deleteDoc(doc(db, COLLECTIONS.clients, client.id))
+          count++
+        }
+      }
+    }
+    return count
   },
 }
 
@@ -443,6 +494,11 @@ export const casesStorage = {
     try {
       const snapshot = await getDocs(collection(db, COLLECTIONS.cases))
       let cases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Case))
+      
+      // Filter out deleted cases (unless viewing trash)
+      if (!params.includeDeleted) {
+        cases = cases.filter(c => !c.deletedAt)
+      }
       
       if (params.search) {
         const search = params.search.toLowerCase()
@@ -500,7 +556,53 @@ export const casesStorage = {
   },
 
   async delete(id: string): Promise<void> {
+    // Soft delete - move to trash
+    const caseRef = doc(db, COLLECTIONS.cases, id)
+    await updateDoc(caseRef, { deletedAt: new Date().toISOString() })
+  },
+
+  async restore(id: string): Promise<Case> {
+    const caseRef = doc(db, COLLECTIONS.cases, id)
+    await updateDoc(caseRef, { deletedAt: null })
+    const restored = await getDoc(caseRef)
+    return { id, ...restored.data() } as Case
+  },
+
+  async getDeleted(): Promise<Case[]> {
+    const snapshot = await getDocs(collection(db, COLLECTIONS.cases))
+    const cases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Case))
+    // Filter only deleted cases within last 30 days
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    return cases.filter(c => {
+      if (!c.deletedAt) return false
+      const deletedDate = new Date(c.deletedAt)
+      return deletedDate > thirtyDaysAgo
+    })
+  },
+
+  async permanentDelete(id: string): Promise<void> {
     await deleteDoc(doc(db, COLLECTIONS.cases, id))
+  },
+
+  async cleanupExpired(): Promise<number> {
+    // Delete cases that have been in trash for more than 30 days
+    const snapshot = await getDocs(collection(db, COLLECTIONS.cases))
+    const cases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Case))
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    
+    let count = 0
+    for (const caseItem of cases) {
+      if (caseItem.deletedAt) {
+        const deletedDate = new Date(caseItem.deletedAt)
+        if (deletedDate <= thirtyDaysAgo) {
+          await deleteDoc(doc(db, COLLECTIONS.cases, caseItem.id))
+          count++
+        }
+      }
+    }
+    return count
   },
 }
 

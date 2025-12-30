@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
 import { Client } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
@@ -19,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Search, Edit, Trash2, User, Building, Calendar, MapPin, Globe, FileDown, MoreVertical } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, User, Building, Calendar, MapPin, Globe, FileDown, MoreVertical, RotateCcw, Trash, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { countries } from '@/lib/countries'
 import { exportToExcel, formatClientsForExport } from '@/lib/excel-export'
@@ -40,6 +41,28 @@ export function ClientsPage({ clients, onRefresh }: ClientsPageProps) {
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showTrash, setShowTrash] = useState(false)
+  const [deletedClients, setDeletedClients] = useState<Client[]>([])
+  const [isTrashLoading, setIsTrashLoading] = useState(false)
+
+  // Load deleted clients when trash view is opened
+  useEffect(() => {
+    if (showTrash) {
+      loadDeletedClients()
+    }
+  }, [showTrash])
+
+  const loadDeletedClients = async () => {
+    setIsTrashLoading(true)
+    try {
+      const deleted = await api.getDeletedClients()
+      setDeletedClients(deleted)
+    } catch (error) {
+      toast.error('Failed to load deleted clients')
+    } finally {
+      setIsTrashLoading(false)
+    }
+  }
 
   // Form state
   const [formData, setFormData] = useState({
@@ -167,15 +190,49 @@ export function ClientsPage({ clients, onRefresh }: ClientsPageProps) {
   }
 
   const handleDelete = async (client: Client) => {
-    if (!confirm(`Are you sure you want to delete ${getDisplayName(client)}?`)) return
+    if (!confirm(`Are you sure you want to delete ${getDisplayName(client)}? It will be moved to trash for 30 days.`)) return
 
     try {
       await api.deleteClient(client.id)
-      toast.success('Client deleted')
+      toast.success('Client moved to trash. You can restore it within 30 days.')
       onRefresh()
     } catch (error: any) {
       toast.error(error.message || 'Delete failed')
     }
+  }
+
+  const handleRestore = async (client: Client) => {
+    try {
+      await api.restoreClient(client.id)
+      toast.success('Client restored successfully')
+      loadDeletedClients()
+      onRefresh()
+    } catch (error: any) {
+      toast.error(error.message || 'Restore failed')
+    }
+  }
+
+  const handlePermanentDelete = async (client: Client) => {
+    if (!confirm(`Are you sure you want to permanently delete ${getDisplayName(client)}? This action cannot be undone!`)) return
+
+    try {
+      await api.permanentDeleteClient(client.id)
+      toast.success('Client permanently deleted')
+      loadDeletedClients()
+    } catch (error: any) {
+      toast.error(error.message || 'Delete failed')
+    }
+  }
+
+  // Calculate days remaining for deleted client
+  const getDaysRemaining = (deletedAt: string) => {
+    const deleted = new Date(deletedAt)
+    const expiry = new Date(deleted)
+    expiry.setDate(expiry.getDate() + 30)
+    const now = new Date()
+    const diffTime = expiry.getTime() - now.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return Math.max(0, diffDays)
   }
 
   // Export clients to Excel
@@ -197,40 +254,117 @@ export function ClientsPage({ clients, onRefresh }: ClientsPageProps) {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Clients</h1>
-          <p className="text-muted-foreground">Manage your client database</p>
+          <h1 className="text-3xl font-bold">{showTrash ? 'Deleted Clients' : 'Clients'}</h1>
+          <p className="text-muted-foreground">
+            {showTrash ? 'Restore or permanently delete clients (auto-deleted after 30 days)' : 'Manage your client database'}
+          </p>
         </div>
         <div className="flex gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleExportClients}>
-                <FileDown className="h-4 w-4 mr-2" />
-                Export to Excel
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button onClick={openCreateDialog}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Client
+          <Button 
+            variant={showTrash ? "default" : "outline"} 
+            onClick={() => setShowTrash(!showTrash)}
+          >
+            {showTrash ? (
+              <>
+                <User className="mr-2 h-4 w-4" />
+                View Active Clients
+              </>
+            ) : (
+              <>
+                <Trash className="mr-2 h-4 w-4" />
+                View Trash ({deletedClients.length || '...'})
+              </>
+            )}
           </Button>
+          {!showTrash && (
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportClients}>
+                    <FileDown className="h-4 w-4 mr-2" />
+                    Export to Excel
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button onClick={openCreateDialog}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Client
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search clients..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
-      </div>
+      {/* Trash View */}
+      {showTrash ? (
+        <div className="space-y-4">
+          {isTrashLoading ? (
+            <div className="text-center py-12 text-muted-foreground">Loading deleted clients...</div>
+          ) : deletedClients.length === 0 ? (
+            <Card className="p-12 text-center">
+              <Trash className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium">Trash is empty</h3>
+              <p className="text-muted-foreground">Deleted clients will appear here for 30 days before being permanently removed.</p>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {deletedClients.map((client: any) => (
+                <Card key={client.id} className="hover:shadow-lg transition-shadow border-destructive/30">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-full bg-destructive/10">
+                          {client.type === 'Corporate' ? (
+                            <Building className="h-5 w-5 text-destructive" />
+                          ) : (
+                            <User className="h-5 w-5 text-destructive" />
+                          )}
+                        </div>
+                        <div>
+                          <CardTitle className="text-base line-through opacity-70">{getDisplayName(client)}</CardTitle>
+                          <p className="text-sm text-muted-foreground">{client.email}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2 text-sm text-amber-500 mb-3">
+                      <Clock className="h-4 w-4" />
+                      <span>{getDaysRemaining(client.deletedAt)} days remaining</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="flex-1" onClick={() => handleRestore(client)}>
+                        <RotateCcw className="h-4 w-4 mr-1" />
+                        Restore
+                      </Button>
+                      <Button size="sm" variant="destructive" className="flex-1" onClick={() => handlePermanentDelete(client)}>
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete Forever
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Search */}
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search clients..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
 
       {/* Client List */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -305,6 +439,8 @@ export function ClientsPage({ clients, onRefresh }: ClientsPageProps) {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Add/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -439,11 +575,11 @@ export function ClientsPage({ clients, onRefresh }: ClientsPageProps) {
 
             <div className="space-y-2">
               <Label htmlFor="phone">Phone *</Label>
-              <Input
+              <PhoneInput
                 id="phone"
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="(555) 123-4567"
+                onChange={(value) => setFormData({ ...formData, phone: value })}
+                placeholder="123-456-7890"
                 required
               />
             </div>
