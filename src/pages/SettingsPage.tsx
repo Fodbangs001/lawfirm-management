@@ -54,12 +54,21 @@ export function SettingsPage() {
   const [currency, setCurrency] = useState(() => {
     return localStorage.getItem('currency') || 'USD'
   })
+  const [inactivityTimeout, setInactivityTimeout] = useState(() => {
+    return localStorage.getItem('inactivityTimeout') || '15'
+  })
 
 
   const handleCurrencyChange = (newCurrency: string) => {
     setCurrency(newCurrency)
     localStorage.setItem('currency', newCurrency)
     toast.success(`Currency changed to ${newCurrency}`)
+  }
+
+  const handleInactivityTimeoutChange = (value: string) => {
+    setInactivityTimeout(value)
+    localStorage.setItem('inactivityTimeout', value)
+    toast.success(`Session timeout set to ${value} minutes. Changes will apply on next login.`)
   }
 
   // Apply theme
@@ -239,6 +248,33 @@ export function SettingsPage() {
                         </span>
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Auto Logout (Inactivity Timeout)
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Automatically log out after a period of inactivity for security
+                </p>
+                <Select value={inactivityTimeout} onValueChange={handleInactivityTimeoutChange}>
+                  <SelectTrigger>
+                    <SelectValue>
+                      {inactivityTimeout} minutes
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5 minutes</SelectItem>
+                    <SelectItem value="10">10 minutes</SelectItem>
+                    <SelectItem value="15">15 minutes (Default)</SelectItem>
+                    <SelectItem value="30">30 minutes</SelectItem>
+                    <SelectItem value="60">1 hour</SelectItem>
+                    <SelectItem value="120">2 hours</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

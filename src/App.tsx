@@ -29,8 +29,18 @@ import {
   parseImportedTasks,
 } from '@/lib/excel-export'
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Clock } from 'lucide-react'
+
 function AppContent() {
-  const { isAuthenticated, isLoading, user } = useAuth()
+  const { isAuthenticated, isLoading, user, showInactivityWarning, remainingTime, extendSession, logout } = useAuth()
   const [activeView, setActiveView] = useState('dashboard')
 
   // Data state
@@ -332,9 +342,42 @@ function AppContent() {
   }
 
   return (
-    <Layout activeView={activeView} onNavigate={setActiveView} onExport={handleExport} onImport={handleImport}>
-      {renderView()}
-    </Layout>
+    <>
+      <Layout activeView={activeView} onNavigate={setActiveView} onExport={handleExport} onImport={handleImport}>
+        {renderView()}
+      </Layout>
+
+      {/* Inactivity Warning Dialog */}
+      <Dialog open={showInactivityWarning} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-500">
+              <Clock className="h-5 w-5" />
+              Session Timeout Warning
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-muted-foreground mb-4">
+              You have been inactive for a while. For security reasons, you will be automatically logged out.
+            </p>
+            <div className="flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-4xl font-bold text-amber-500">{remainingTime}</div>
+                <div className="text-sm text-muted-foreground">seconds remaining</div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <Button variant="outline" onClick={logout}>
+              Logout Now
+            </Button>
+            <Button onClick={extendSession}>
+              Stay Logged In
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
