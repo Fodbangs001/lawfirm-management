@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { Case, Client, User } from '@/lib/types'
@@ -35,7 +35,8 @@ import {
   FileText,
   Trash2,
   Globe,
-  Download
+  Download,
+  RefreshCw
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { countries } from '@/lib/countries'
@@ -82,6 +83,7 @@ Mrs. ${clientName} is an Asylum Seeker until the Court issues its final decision
 
 export function AsylumPage({ cases, clients, users, onRefresh }: AsylumPageProps) {
   const { user: currentUser } = useAuth()
+  const [loading, setLoading] = useState(true)
 
   // Filter asylum cases
   const asylumCases = useMemo(
@@ -109,19 +111,75 @@ export function AsylumPage({ cases, clients, users, onRefresh }: AsylumPageProps
   const [channel, setChannel] = useState<'Email' | 'SMS' | 'Phone'>('Email')
   const [subject, setSubject] = useState('Asylum Case Notification')
   const [notificationBody, setNotificationBody] = useState('')
-  const [savedNotifications, setSavedNotifications] = useState<SavedNotification[]>(() => {
-    const saved = localStorage.getItem('asylum-notifications')
-    return saved ? JSON.parse(saved) : []
-  })
+  const [savedNotifications, setSavedNotifications] = useState<SavedNotification[]>([])
 
   // Payment state
   const [paymentAmount, setPaymentAmount] = useState('')
   const [paymentDueDate, setPaymentDueDate] = useState('')
   const [paymentNotes, setPaymentNotes] = useState('')
-  const [paymentReminders, setPaymentReminders] = useState<PaymentReminder[]>(() => {
-    const saved = localStorage.getItem('asylum-payments')
-    return saved ? JSON.parse(saved) : []
-  })
+  const [paymentReminders, setPaymentReminders] = useState<PaymentReminder[]>([])
+
+  // Load asylum data from Firebase
+  const loadAsylumData = async () => {
+    try {
+      setLoading(true)
+      const [notificationsData, paymentsData] = await Promise.all([
+        api.getAsylumNotifications(),
+        api.getAsylumPayments(),
+      ])
+      
+      setSavedNotifications(notificationsData || [])
+      setPaymentReminders(paymentsData || [])
+
+      // Migrate any existing localStorage data to Firebase (one-time migration)
+      await migrateLocalStorageToFirebase()
+    } catch (error) {
+      console.error('Failed to load asylum data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // One-time migration from localStorage to Firebase
+  const migrateLocalStorageToFirebase = async () => {
+    const localNotifications = localStorage.getItem('asylum-notifications')
+    const localPayments = localStorage.getItem('asylum-payments')
+
+    let migrated = false
+
+    if (localNotifications) {
+      const data = JSON.parse(localNotifications)
+      if (data.length > 0 && savedNotifications.length === 0) {
+        toast.info('Migrating asylum notifications to cloud...')
+        for (const item of data) {
+          try { await api.createAsylumNotification(item) } catch (e) { console.error(e) }
+        }
+        migrated = true
+      }
+      localStorage.removeItem('asylum-notifications')
+    }
+
+    if (localPayments) {
+      const data = JSON.parse(localPayments)
+      if (data.length > 0 && paymentReminders.length === 0) {
+        toast.info('Migrating asylum payments to cloud...')
+        for (const item of data) {
+          try { await api.createAsylumPayment(item) } catch (e) { console.error(e) }
+        }
+        migrated = true
+      }
+      localStorage.removeItem('asylum-payments')
+    }
+
+    if (migrated) {
+      toast.success('Asylum data migrated to cloud storage')
+      await loadAsylumData()
+    }
+  }
+
+  useEffect(() => {
+    loadAsylumData()
+  }, [])
 
   // New client form state
   const [newClient, setNewClient] = useState({
@@ -370,79 +428,91 @@ export function AsylumPage({ cases, clients, users, onRefresh }: AsylumPageProps
   }
 
   // Save notification
-  const saveNotification = () => {
+  const saveNotification = async () => {
     if (!activeNotificationClient || !notificationBody) {
       toast.error('Please generate a notification first')
       return
     }
 
-    const notification: SavedNotification = {
-      id: `notif-${Date.now()}`,
-      caseId: selectedCase?.id || '',
-      clientName: getClientDisplayName(activeNotificationClient),
-      subject,
-      body: notificationBody,
-      channel,
-      createdAt: new Date().toISOString(),
-    }
+    try {
+      await api.createAsylumNotification({
+        caseId: selectedCase?.id || '',
+        clientName: getClientDisplayName(activeNotificationClient),
+        subject,
+        body: notificationBody,
+        channel,
+      })
 
-    const updated = [...savedNotifications, notification]
-    setSavedNotifications(updated)
-    localStorage.setItem('asylum-notifications', JSON.stringify(updated))
-    toast.success('Notification saved')
+      toast.success('Notification saved')
+      await loadAsylumData()
+    } catch (error) {
+      console.error('Failed to save notification:', error)
+      toast.error('Failed to save notification')
+    }
   }
 
   // Delete notification
-  const deleteNotification = (id: string) => {
-    const updated = savedNotifications.filter((n) => n.id !== id)
-    setSavedNotifications(updated)
-    localStorage.setItem('asylum-notifications', JSON.stringify(updated))
-    toast.success('Notification deleted')
+  const deleteNotification = async (id: string) => {
+    try {
+      await api.deleteAsylumNotification(id)
+      toast.success('Notification deleted')
+      await loadAsylumData()
+    } catch (error) {
+      console.error('Failed to delete notification:', error)
+      toast.error('Failed to delete notification')
+    }
   }
 
   // Create payment reminder
-  const createPaymentReminder = () => {
+  const createPaymentReminder = async () => {
     if (!selectedCase || !paymentAmount || !paymentDueDate) {
       toast.error('Please select a case and fill in payment details')
       return
     }
 
-    const reminder: PaymentReminder = {
-      id: `pay-${Date.now()}`,
-      caseId: selectedCase.id,
-      clientName: selectedClient?.name || 'Unknown',
-      amountDue: parseFloat(paymentAmount),
-      dueDate: paymentDueDate,
-      status: 'Pending',
-      notes: paymentNotes,
-      createdAt: new Date().toISOString(),
-    }
+    try {
+      await api.createAsylumPayment({
+        caseId: selectedCase.id,
+        clientName: selectedClient?.name || 'Unknown',
+        amountDue: parseFloat(paymentAmount),
+        dueDate: paymentDueDate,
+        status: 'Pending',
+        notes: paymentNotes,
+      })
 
-    const updated = [...paymentReminders, reminder]
-    setPaymentReminders(updated)
-    localStorage.setItem('asylum-payments', JSON.stringify(updated))
-    setPaymentAmount('')
-    setPaymentDueDate('')
-    setPaymentNotes('')
-    toast.success('Payment reminder created')
+      setPaymentAmount('')
+      setPaymentDueDate('')
+      setPaymentNotes('')
+      toast.success('Payment reminder created')
+      await loadAsylumData()
+    } catch (error) {
+      console.error('Failed to create payment reminder:', error)
+      toast.error('Failed to create payment reminder')
+    }
   }
 
   // Update payment status
-  const updatePaymentStatus = (id: string, status: 'Pending' | 'Sent' | 'Paid') => {
-    const updated = paymentReminders.map((r) =>
-      r.id === id ? { ...r, status } : r
-    )
-    setPaymentReminders(updated)
-    localStorage.setItem('asylum-payments', JSON.stringify(updated))
-    toast.success(`Status updated to ${status}`)
+  const updatePaymentStatus = async (id: string, status: 'Pending' | 'Sent' | 'Paid') => {
+    try {
+      await api.updateAsylumPayment(id, { status })
+      toast.success(`Status updated to ${status}`)
+      await loadAsylumData()
+    } catch (error) {
+      console.error('Failed to update payment status:', error)
+      toast.error('Failed to update status')
+    }
   }
 
   // Delete payment reminder
-  const deletePaymentReminder = (id: string) => {
-    const updated = paymentReminders.filter((r) => r.id !== id)
-    setPaymentReminders(updated)
-    localStorage.setItem('asylum-payments', JSON.stringify(updated))
-    toast.success('Reminder deleted')
+  const deletePaymentReminder = async (id: string) => {
+    try {
+      await api.deleteAsylumPayment(id)
+      toast.success('Reminder deleted')
+      await loadAsylumData()
+    } catch (error) {
+      console.error('Failed to delete payment reminder:', error)
+      toast.error('Failed to delete reminder')
+    }
   }
 
   // Add new asylum client
@@ -509,6 +579,15 @@ export function AsylumPage({ cases, clients, users, onRefresh }: AsylumPageProps
     (r) => r.caseId === selectedCaseId
   )
 
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <RefreshCw className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading asylum data...</span>
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -521,10 +600,15 @@ export function AsylumPage({ cases, clients, users, onRefresh }: AsylumPageProps
             Manage asylum clients, cases, notifications, and payments
           </p>
         </div>
-        <Button onClick={() => setIsAddClientDialogOpen(true)}>
-          <UserPlus className="mr-2 h-4 w-4" />
-          Add Asylum Client
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={loadAsylumData} title="Refresh data">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button onClick={() => setIsAddClientDialogOpen(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Add Asylum Client
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="cases" className="space-y-4">

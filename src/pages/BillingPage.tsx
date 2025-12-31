@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useAuth } from '@/lib/auth'
+import { api } from '@/lib/api'
 import { Client, Case } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,7 +41,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   FileDown,
-  MoreVertical
+  MoreVertical,
+  RefreshCw
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -138,30 +140,111 @@ const PAYMENT_METHODS = ['Cash', 'Card', 'Bank Transfer', 'Check', 'Other']
 
 export function BillingPage({ clients, cases, onRefresh }: BillingPageProps) {
   const { user: currentUser } = useAuth()
+  const [loading, setLoading] = useState(true)
 
   // State for payments
-  const [payments, setPayments] = useState<Payment[]>(() => {
-    const saved = localStorage.getItem('billing-payments')
-    return saved ? JSON.parse(saved) : []
-  })
+  const [payments, setPayments] = useState<Payment[]>([])
 
   // State for expenses
-  const [expenses, setExpenses] = useState<Expense[]>(() => {
-    const saved = localStorage.getItem('billing-expenses')
-    return saved ? JSON.parse(saved) : []
-  })
+  const [expenses, setExpenses] = useState<Expense[]>([])
 
   // State for other payments
-  const [otherPayments, setOtherPayments] = useState<OtherPayment[]>(() => {
-    const saved = localStorage.getItem('billing-other')
-    return saved ? JSON.parse(saved) : []
-  })
+  const [otherPayments, setOtherPayments] = useState<OtherPayment[]>([])
 
   // State for notifications
-  const [notifications, setNotifications] = useState<PaymentNotification[]>(() => {
-    const saved = localStorage.getItem('billing-notifications')
-    return saved ? JSON.parse(saved) : []
-  })
+  const [notifications, setNotifications] = useState<PaymentNotification[]>([])
+
+  // Load billing data from Firebase
+  const loadBillingData = async () => {
+    try {
+      setLoading(true)
+      const [paymentsData, expensesData, otherData, notificationsData] = await Promise.all([
+        api.getBillingPayments(),
+        api.getBillingExpenses(),
+        api.getBillingOther(),
+        api.getBillingNotifications(),
+      ])
+      
+      setPayments(paymentsData || [])
+      setExpenses(expensesData || [])
+      setOtherPayments(otherData || [])
+      setNotifications(notificationsData || [])
+
+      // Migrate any existing localStorage data to Firebase (one-time migration)
+      await migrateLocalStorageToFirebase()
+    } catch (error) {
+      console.error('Failed to load billing data:', error)
+      toast.error('Failed to load billing data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // One-time migration from localStorage to Firebase
+  const migrateLocalStorageToFirebase = async () => {
+    const localPayments = localStorage.getItem('billing-payments')
+    const localExpenses = localStorage.getItem('billing-expenses')
+    const localOther = localStorage.getItem('billing-other')
+    const localNotifications = localStorage.getItem('billing-notifications')
+
+    let migrated = false
+
+    if (localPayments) {
+      const data = JSON.parse(localPayments)
+      if (data.length > 0 && payments.length === 0) {
+        toast.info('Migrating billing payments to cloud...')
+        for (const item of data) {
+          try { await api.createBillingPayment(item) } catch (e) { console.error(e) }
+        }
+        migrated = true
+      }
+      localStorage.removeItem('billing-payments')
+    }
+
+    if (localExpenses) {
+      const data = JSON.parse(localExpenses)
+      if (data.length > 0 && expenses.length === 0) {
+        toast.info('Migrating billing expenses to cloud...')
+        for (const item of data) {
+          try { await api.createBillingExpense(item) } catch (e) { console.error(e) }
+        }
+        migrated = true
+      }
+      localStorage.removeItem('billing-expenses')
+    }
+
+    if (localOther) {
+      const data = JSON.parse(localOther)
+      if (data.length > 0 && otherPayments.length === 0) {
+        toast.info('Migrating other payments to cloud...')
+        for (const item of data) {
+          try { await api.createBillingOther(item) } catch (e) { console.error(e) }
+        }
+        migrated = true
+      }
+      localStorage.removeItem('billing-other')
+    }
+
+    if (localNotifications) {
+      const data = JSON.parse(localNotifications)
+      if (data.length > 0 && notifications.length === 0) {
+        for (const item of data) {
+          try { await api.createBillingNotification(item) } catch (e) { console.error(e) }
+        }
+        migrated = true
+      }
+      localStorage.removeItem('billing-notifications')
+    }
+
+    if (migrated) {
+      toast.success('Billing data migrated to cloud storage')
+      await loadBillingData()
+    }
+  }
+
+  useEffect(() => {
+    loadBillingData()
+  }, [])
 
   // Dialog states
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
@@ -204,27 +287,6 @@ export function BillingPage({ clients, cases, onRefresh }: BillingPageProps) {
   })
 
   const [notificationMessage, setNotificationMessage] = useState('')
-
-  // Save to localStorage
-  const savePayments = (data: Payment[]) => {
-    setPayments(data)
-    localStorage.setItem('billing-payments', JSON.stringify(data))
-  }
-
-  const saveExpenses = (data: Expense[]) => {
-    setExpenses(data)
-    localStorage.setItem('billing-expenses', JSON.stringify(data))
-  }
-
-  const saveOtherPayments = (data: OtherPayment[]) => {
-    setOtherPayments(data)
-    localStorage.setItem('billing-other', JSON.stringify(data))
-  }
-
-  const saveNotifications = (data: PaymentNotification[]) => {
-    setNotifications(data)
-    localStorage.setItem('billing-notifications', JSON.stringify(data))
-  }
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -269,36 +331,39 @@ export function BillingPage({ clients, cases, onRefresh }: BillingPageProps) {
   }
 
   // Create payment
-  const handleCreatePayment = () => {
+  const handleCreatePayment = async () => {
     if (!newPayment.clientId || !newPayment.totalAmount || !newPayment.dueDate) {
       toast.error('Please fill in all required fields')
       return
     }
 
-    const payment: Payment = {
-      id: `pay-${Date.now()}`,
-      clientId: newPayment.clientId,
-      clientName: getClientName(newPayment.clientId),
-      caseId: newPayment.caseId || undefined,
-      caseName: getCaseTitle(newPayment.caseId),
-      totalAmount: parseFloat(newPayment.totalAmount),
-      paidAmount: 0,
-      balance: parseFloat(newPayment.totalAmount),
-      status: 'Pending',
-      dueDate: newPayment.dueDate,
-      description: newPayment.description,
-      payments: [],
-      createdAt: new Date().toISOString(),
-    }
+    try {
+      await api.createBillingPayment({
+        clientId: newPayment.clientId,
+        clientName: getClientName(newPayment.clientId),
+        caseId: newPayment.caseId || undefined,
+        caseName: getCaseTitle(newPayment.caseId),
+        totalAmount: parseFloat(newPayment.totalAmount),
+        paidAmount: 0,
+        balance: parseFloat(newPayment.totalAmount),
+        status: 'Pending',
+        dueDate: newPayment.dueDate,
+        description: newPayment.description,
+        payments: [],
+      })
 
-    savePayments([...payments, payment])
-    setIsPaymentDialogOpen(false)
-    setNewPayment({ clientId: '', caseId: '', totalAmount: '', dueDate: '', description: '' })
-    toast.success('Payment created successfully')
+      setIsPaymentDialogOpen(false)
+      setNewPayment({ clientId: '', caseId: '', totalAmount: '', dueDate: '', description: '' })
+      toast.success('Payment created successfully')
+      await loadBillingData()
+    } catch (error) {
+      console.error('Failed to create payment:', error)
+      toast.error('Failed to create payment')
+    }
   }
 
   // Add partial payment
-  const handleAddPartialPayment = () => {
+  const handleAddPartialPayment = async () => {
     if (!selectedPayment || !newPartialPayment.amount) {
       toast.error('Please enter payment amount')
       return
@@ -322,106 +387,140 @@ export function BillingPage({ clients, cases, onRefresh }: BillingPageProps) {
     const newBalance = selectedPayment.totalAmount - newPaidAmount
     const newStatus = newBalance === 0 ? 'Paid' : 'Partial'
 
-    const updated = payments.map(p =>
-      p.id === selectedPayment.id
-        ? { ...p, paidAmount: newPaidAmount, balance: newBalance, status: newStatus as any, payments: [...p.payments, partial] }
-        : p
-    )
+    try {
+      await api.updateBillingPayment(selectedPayment.id, {
+        paidAmount: newPaidAmount,
+        balance: newBalance,
+        status: newStatus,
+        payments: [...selectedPayment.payments, partial],
+      })
 
-    savePayments(updated)
-    setIsPartialPaymentDialogOpen(false)
-    setNewPartialPayment({ amount: '', method: 'Cash', notes: '' })
-    setSelectedPayment(null)
-    toast.success('Payment recorded successfully')
+      setIsPartialPaymentDialogOpen(false)
+      setNewPartialPayment({ amount: '', method: 'Cash', notes: '' })
+      setSelectedPayment(null)
+      toast.success('Payment recorded successfully')
+      await loadBillingData()
+    } catch (error) {
+      console.error('Failed to add partial payment:', error)
+      toast.error('Failed to record payment')
+    }
   }
 
   // Create expense
-  const handleCreateExpense = () => {
+  const handleCreateExpense = async () => {
     if (!newExpense.category || !newExpense.amount || !newExpense.date) {
       toast.error('Please fill in all required fields')
       return
     }
 
-    const expense: Expense = {
-      id: `exp-${Date.now()}`,
-      category: newExpense.category,
-      amount: parseFloat(newExpense.amount),
-      date: newExpense.date,
-      description: newExpense.description,
-      vendor: newExpense.vendor,
-      createdAt: new Date().toISOString(),
-    }
+    try {
+      await api.createBillingExpense({
+        category: newExpense.category,
+        amount: parseFloat(newExpense.amount),
+        date: newExpense.date,
+        description: newExpense.description,
+        vendor: newExpense.vendor,
+      })
 
-    saveExpenses([...expenses, expense])
-    setIsExpenseDialogOpen(false)
-    setNewExpense({ category: '', amount: '', date: format(new Date(), 'yyyy-MM-dd'), description: '', vendor: '' })
-    toast.success('Expense added successfully')
+      setIsExpenseDialogOpen(false)
+      setNewExpense({ category: '', amount: '', date: format(new Date(), 'yyyy-MM-dd'), description: '', vendor: '' })
+      toast.success('Expense added successfully')
+      await loadBillingData()
+    } catch (error) {
+      console.error('Failed to create expense:', error)
+      toast.error('Failed to add expense')
+    }
   }
 
   // Create other payment
-  const handleCreateOtherPayment = () => {
+  const handleCreateOtherPayment = async () => {
     if (!newOtherPayment.category || !newOtherPayment.amount || !newOtherPayment.date) {
       toast.error('Please fill in all required fields')
       return
     }
 
-    const other: OtherPayment = {
-      id: `other-${Date.now()}`,
-      type: newOtherPayment.type,
-      category: newOtherPayment.category,
-      amount: parseFloat(newOtherPayment.amount),
-      date: newOtherPayment.date,
-      description: newOtherPayment.description,
-      reference: newOtherPayment.reference,
-      createdAt: new Date().toISOString(),
-    }
+    try {
+      await api.createBillingOther({
+        type: newOtherPayment.type,
+        category: newOtherPayment.category,
+        amount: parseFloat(newOtherPayment.amount),
+        date: newOtherPayment.date,
+        description: newOtherPayment.description,
+        reference: newOtherPayment.reference,
+      })
 
-    saveOtherPayments([...otherPayments, other])
-    setIsOtherPaymentDialogOpen(false)
-    setNewOtherPayment({ type: 'Income', category: '', amount: '', date: format(new Date(), 'yyyy-MM-dd'), description: '', reference: '' })
-    toast.success('Payment added successfully')
+      setIsOtherPaymentDialogOpen(false)
+      setNewOtherPayment({ type: 'Income', category: '', amount: '', date: format(new Date(), 'yyyy-MM-dd'), description: '', reference: '' })
+      toast.success('Payment added successfully')
+      await loadBillingData()
+    } catch (error) {
+      console.error('Failed to create other payment:', error)
+      toast.error('Failed to add payment')
+    }
   }
 
   // Send notification
-  const handleSendNotification = () => {
+  const handleSendNotification = async () => {
     if (!selectedPayment || !notificationMessage) {
       toast.error('Please enter notification message')
       return
     }
 
-    const notification: PaymentNotification = {
-      id: `notif-${Date.now()}`,
-      clientId: selectedPayment.clientId,
-      clientName: selectedPayment.clientName,
-      paymentId: selectedPayment.id,
-      amount: selectedPayment.balance,
-      dueDate: selectedPayment.dueDate,
-      message: notificationMessage,
-      status: 'Sent',
-      createdAt: new Date().toISOString(),
-    }
+    try {
+      await api.createBillingNotification({
+        clientId: selectedPayment.clientId,
+        clientName: selectedPayment.clientName,
+        paymentId: selectedPayment.id,
+        amount: selectedPayment.balance,
+        dueDate: selectedPayment.dueDate,
+        message: notificationMessage,
+        status: 'Sent',
+      })
 
-    saveNotifications([...notifications, notification])
-    setIsNotificationDialogOpen(false)
-    setNotificationMessage('')
-    setSelectedPayment(null)
-    toast.success('Notification sent to ' + selectedPayment.clientName)
+      setIsNotificationDialogOpen(false)
+      setNotificationMessage('')
+      const clientName = selectedPayment.clientName
+      setSelectedPayment(null)
+      toast.success('Notification sent to ' + clientName)
+      await loadBillingData()
+    } catch (error) {
+      console.error('Failed to send notification:', error)
+      toast.error('Failed to send notification')
+    }
   }
 
   // Delete functions
-  const deletePayment = (id: string) => {
-    savePayments(payments.filter(p => p.id !== id))
-    toast.success('Payment deleted')
+  const deletePayment = async (id: string) => {
+    try {
+      await api.deleteBillingPayment(id)
+      toast.success('Payment deleted')
+      await loadBillingData()
+    } catch (error) {
+      console.error('Failed to delete payment:', error)
+      toast.error('Failed to delete payment')
+    }
   }
 
-  const deleteExpense = (id: string) => {
-    saveExpenses(expenses.filter(e => e.id !== id))
-    toast.success('Expense deleted')
+  const deleteExpense = async (id: string) => {
+    try {
+      await api.deleteBillingExpense(id)
+      toast.success('Expense deleted')
+      await loadBillingData()
+    } catch (error) {
+      console.error('Failed to delete expense:', error)
+      toast.error('Failed to delete expense')
+    }
   }
 
-  const deleteOtherPayment = (id: string) => {
-    saveOtherPayments(otherPayments.filter(p => p.id !== id))
-    toast.success('Payment deleted')
+  const deleteOtherPayment = async (id: string) => {
+    try {
+      await api.deleteBillingOther(id)
+      toast.success('Payment deleted')
+      await loadBillingData()
+    } catch (error) {
+      console.error('Failed to delete payment:', error)
+      toast.error('Failed to delete payment')
+    }
   }
 
   // Open partial payment dialog
@@ -482,6 +581,15 @@ export function BillingPage({ clients, cases, onRefresh }: BillingPageProps) {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <span className="ml-3 text-muted-foreground">Loading billing data...</span>
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -494,19 +602,24 @@ export function BillingPage({ clients, cases, onRefresh }: BillingPageProps) {
             Manage payments, expenses, and financial records
           </p>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon">
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={handleExportBilling}>
-              <FileDown className="h-4 w-4 mr-2" />
-              Export to Excel
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={loadBillingData} title="Refresh">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportBilling}>
+                <FileDown className="h-4 w-4 mr-2" />
+                Export to Excel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Summary Cards */}

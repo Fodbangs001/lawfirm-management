@@ -49,6 +49,14 @@ export const COLLECTIONS = {
   invoices: 'invoices',
   passwords: 'passwords',
   settings: 'settings',
+  // Billing collections
+  billingPayments: 'billingPayments',
+  billingExpenses: 'billingExpenses',
+  billingOther: 'billingOther',
+  billingNotifications: 'billingNotifications',
+  // Asylum collections
+  asylumNotifications: 'asylumNotifications',
+  asylumPayments: 'asylumPayments',
 }
 
 // Export Firestore functions for use in storage

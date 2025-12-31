@@ -14,6 +14,12 @@ import {
   timeEntriesStorage,
   invoicesStorage,
   dashboardStorage,
+  billingPaymentsStorage,
+  billingExpensesStorage,
+  billingOtherStorage,
+  billingNotificationsStorage,
+  asylumNotificationsStorage,
+  asylumPaymentsStorage,
 } from './storage'
 
 class ApiClient {
@@ -238,6 +244,122 @@ class ApiClient {
   // Dashboard
   async getDashboardStats() {
     return dashboardStorage.getStats()
+  }
+
+  // ============================================
+  // BILLING APIs
+  // ============================================
+
+  // Billing Payments
+  async getBillingPayments() {
+    return billingPaymentsStorage.getAll()
+  }
+
+  async createBillingPayment(data: any) {
+    return billingPaymentsStorage.create(data)
+  }
+
+  async updateBillingPayment(id: string, data: any) {
+    return billingPaymentsStorage.update(id, data)
+  }
+
+  async deleteBillingPayment(id: string) {
+    await billingPaymentsStorage.delete(id)
+    return { success: true }
+  }
+
+  // Billing Expenses
+  async getBillingExpenses() {
+    return billingExpensesStorage.getAll()
+  }
+
+  async createBillingExpense(data: any) {
+    return billingExpensesStorage.create(data)
+  }
+
+  async updateBillingExpense(id: string, data: any) {
+    return billingExpensesStorage.update(id, data)
+  }
+
+  async deleteBillingExpense(id: string) {
+    await billingExpensesStorage.delete(id)
+    return { success: true }
+  }
+
+  // Billing Other Payments
+  async getBillingOther() {
+    return billingOtherStorage.getAll()
+  }
+
+  async createBillingOther(data: any) {
+    return billingOtherStorage.create(data)
+  }
+
+  async updateBillingOther(id: string, data: any) {
+    return billingOtherStorage.update(id, data)
+  }
+
+  async deleteBillingOther(id: string) {
+    await billingOtherStorage.delete(id)
+    return { success: true }
+  }
+
+  // Billing Notifications
+  async getBillingNotifications() {
+    return billingNotificationsStorage.getAll()
+  }
+
+  async createBillingNotification(data: any) {
+    return billingNotificationsStorage.create(data)
+  }
+
+  async updateBillingNotification(id: string, data: any) {
+    return billingNotificationsStorage.update(id, data)
+  }
+
+  async deleteBillingNotification(id: string) {
+    await billingNotificationsStorage.delete(id)
+    return { success: true }
+  }
+
+  // ============================================
+  // ASYLUM APIs
+  // ============================================
+
+  // Asylum Notifications
+  async getAsylumNotifications() {
+    return asylumNotificationsStorage.getAll()
+  }
+
+  async createAsylumNotification(data: any) {
+    return asylumNotificationsStorage.create(data)
+  }
+
+  async updateAsylumNotification(id: string, data: any) {
+    return asylumNotificationsStorage.update(id, data)
+  }
+
+  async deleteAsylumNotification(id: string) {
+    await asylumNotificationsStorage.delete(id)
+    return { success: true }
+  }
+
+  // Asylum Payments
+  async getAsylumPayments() {
+    return asylumPaymentsStorage.getAll()
+  }
+
+  async createAsylumPayment(data: any) {
+    return asylumPaymentsStorage.create(data)
+  }
+
+  async updateAsylumPayment(id: string, data: any) {
+    return asylumPaymentsStorage.update(id, data)
+  }
+
+  async deleteAsylumPayment(id: string) {
+    await asylumPaymentsStorage.delete(id)
+    return { success: true }
   }
 
   // Health check

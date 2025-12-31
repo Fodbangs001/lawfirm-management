@@ -15,6 +15,7 @@ import { UsersPage } from '@/pages/UsersPage'
 import { ReportsPage } from '@/pages/ReportsPage'
 import { DocumentsPage } from '@/pages/DocumentsPage'
 import { Layout } from '@/components/Layout'
+import { ImportMappingDialog } from '@/components/ImportMappingDialog'
 import { Toaster, toast } from 'sonner'
 import {
   exportToExcel,
@@ -23,10 +24,6 @@ import {
   formatCasesForExport,
   formatTasksForExport,
   formatCourtLogsForExport,
-  importFromExcel,
-  parseImportedClients,
-  parseImportedCases,
-  parseImportedTasks,
 } from '@/lib/excel-export'
 
 import {
@@ -49,6 +46,11 @@ function AppContent() {
   const [tasks, setTasks] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [messages, setMessages] = useState<any[]>([])
+
+  // Import dialog state
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importType, setImportType] = useState<'clients' | 'cases' | 'tasks'>('clients')
 
   // Load data when authenticated
   useEffect(() => {
@@ -202,92 +204,99 @@ function AppContent() {
     }
   }
 
-  // Handle import
-  const handleImport = async (type: 'clients' | 'cases' | 'tasks', file: File) => {
+  // Handle import - opens the mapping dialog
+  const handleImport = (type: 'clients' | 'cases' | 'tasks', file: File) => {
+    setImportType(type)
+    setImportFile(file)
+    setImportDialogOpen(true)
+  }
+
+  // Handle the actual import after user maps columns
+  const handleMappedImport = async (mappedData: any[], mappings: Record<string, string>) => {
     try {
-      toast.info(`Importing ${type} from ${file.name}...`)
-
-      const rawData = await importFromExcel(file)
-
-      if (!rawData || rawData.length === 0) {
-        toast.error('No data found in the file')
-        return
-      }
-
+      toast.info(`Importing ${importType}...`)
       let importedCount = 0
 
-      switch (type) {
+      switch (importType) {
         case 'clients':
-          const parsedClients = parseImportedClients(rawData)
-          // Add to server via API
-          for (const client of parsedClients) {
+          for (const client of mappedData) {
             try {
               await api.createClient({
-                name: client.name,
-                firstName: client.firstName,
-                middleName: client.middleName,
-                lastName: client.lastName,
-                type: client.type,
-                email: client.email,
-                phone: client.phone,
-                address: client.address,
-                dateOfBirth: client.dateOfBirth,
-                placeOfBirth: client.placeOfBirth,
-                countryOfBirth: client.countryOfBirth,
-                arcNumber: client.arcNumber,
-                fileNumber: client.fileNumber,
-                notes: client.notes,
+                name: client.name || `${client.firstName || ''} ${client.lastName || ''}`.trim() || 'Unknown',
+                firstName: client.firstName || '',
+                middleName: client.middleName || '',
+                lastName: client.lastName || '',
+                type: client.type || 'Individual',
+                email: client.email || '',
+                phone: client.phone || '',
+                address: client.address || '',
+                dateOfBirth: client.dateOfBirth || '',
+                placeOfBirth: client.placeOfBirth || '',
+                countryOfBirth: client.countryOfBirth || '',
+                arcNumber: client.arcNumber || '',
+                fileNumber: client.fileNumber || '',
+                notes: client.notes || '',
               })
               importedCount++
             } catch (err) {
               console.error('Failed to import client:', client.name, err)
             }
           }
-          toast.success(`Imported ${importedCount} of ${parsedClients.length} clients`)
+          toast.success(`Imported ${importedCount} of ${mappedData.length} clients`)
           break
 
         case 'cases':
-          const parsedCases = parseImportedCases(rawData, clients)
-          for (const caseItem of parsedCases) {
-            if (!caseItem.clientId) {
-              console.warn('Skipping case without client:', caseItem.title)
+          for (const caseItem of mappedData) {
+            // Find client by name
+            const clientName = caseItem.clientName || ''
+            const client = clients.find(c =>
+              c.name?.toLowerCase() === clientName.toLowerCase() ||
+              `${c.firstName} ${c.lastName}`.toLowerCase() === clientName.toLowerCase()
+            )
+            
+            if (!client) {
+              console.warn('Skipping case without matching client:', caseItem.title)
               continue
             }
+            
             try {
               await api.createCase({
-                title: caseItem.title,
-                caseNumber: caseItem.caseNumber,
-                type: caseItem.type,
-                status: caseItem.status,
-                clientId: caseItem.clientId,
-                description: caseItem.description,
+                title: caseItem.title || 'Imported Case',
+                caseNumber: caseItem.caseNumber || `CASE-${Date.now()}-${importedCount}`,
+                type: caseItem.type || 'General',
+                status: caseItem.status || 'Open',
+                clientId: client.id,
+                description: caseItem.description || '',
               })
               importedCount++
             } catch (err) {
               console.error('Failed to import case:', caseItem.title, err)
             }
           }
-          toast.success(`Imported ${importedCount} of ${parsedCases.length} cases`)
+          toast.success(`Imported ${importedCount} of ${mappedData.length} cases`)
           break
 
         case 'tasks':
-          const parsedTasks = parseImportedTasks(rawData, users)
-          for (const task of parsedTasks) {
+          for (const task of mappedData) {
+            // Find assignee by name
+            const assigneeName = task.assignedTo || ''
+            const assignee = users.find(u => u.name?.toLowerCase() === assigneeName.toLowerCase())
+            
             try {
               await api.createTask({
-                title: task.title,
-                description: task.description,
-                status: task.status,
-                priority: task.priority,
-                assignedTo: task.assignedTo,
-                dueDate: task.dueDate,
+                title: task.title || 'Imported Task',
+                description: task.description || '',
+                status: task.status || 'Todo',
+                priority: task.priority || 'Medium',
+                assignedTo: assignee?.id || '',
+                dueDate: task.dueDate || '',
               })
               importedCount++
             } catch (err) {
               console.error('Failed to import task:', task.title, err)
             }
           }
-          toast.success(`Imported ${importedCount} of ${parsedTasks.length} tasks`)
+          toast.success(`Imported ${importedCount} of ${mappedData.length} tasks`)
           break
       }
 
@@ -323,7 +332,7 @@ function AppContent() {
       case 'calendar':
         return <PlaceholderPage title="Calendar" description="View appointments and deadlines." />
       case 'court-log':
-        return <CourtLogPage clients={clients} cases={cases} />
+        return <CourtLogPage clients={clients} cases={cases} onRefresh={loadData} />
       case 'documents':
         return <DocumentsPage clients={clients} cases={cases} />
       case 'messages':
@@ -377,6 +386,18 @@ function AppContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Import Mapping Dialog */}
+      <ImportMappingDialog
+        open={importDialogOpen}
+        onClose={() => {
+          setImportDialogOpen(false)
+          setImportFile(null)
+        }}
+        file={importFile}
+        importType={importType}
+        onImport={handleMappedImport}
+      />
     </>
   )
 }

@@ -60,7 +60,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.clients': 'Clients',
     'nav.cases': 'Cases',
     'nav.asylum': 'Asylum/Immigration',
-    'nav.courtLog': 'Court Log',
+    'nav.courtLog': 'Court Detail',
+    'nav.documents': 'Documents',
     'nav.tasks': 'Tasks',
     'nav.calendar': 'Calendar',
     'nav.messages': 'Messages',
@@ -69,6 +70,21 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.users': 'Users',
     'nav.settings': 'Settings',
     'nav.logout': 'Logout',
+    
+    // Export/Import
+    'nav.exportExcel': 'Export Excel',
+    'nav.importExcel': 'Import Excel',
+    'nav.exportAll': 'Export All',
+    
+    // Common actions
+    'action.add': 'Add',
+    'action.edit': 'Edit',
+    'action.delete': 'Delete',
+    'action.save': 'Save',
+    'action.cancel': 'Cancel',
+    'action.search': 'Search',
+    'action.refresh': 'Refresh',
+    'action.close': 'Close',
   },
 
   ar: {
@@ -113,7 +129,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.clients': 'العملاء',
     'nav.cases': 'القضايا',
     'nav.asylum': 'اللجوء/الهجرة',
-    'nav.courtLog': 'سجل المحكمة',
+    'nav.courtLog': 'تفاصيل المحكمة',
+    'nav.documents': 'المستندات',
     'nav.tasks': 'المهام',
     'nav.calendar': 'التقويم',
     'nav.messages': 'الرسائل',
@@ -122,6 +139,21 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.users': 'المستخدمون',
     'nav.settings': 'الإعدادات',
     'nav.logout': 'تسجيل الخروج',
+    
+    // Export/Import
+    'nav.exportExcel': 'تصدير Excel',
+    'nav.importExcel': 'استيراد Excel',
+    'nav.exportAll': 'تصدير الكل',
+    
+    // Common actions
+    'action.add': 'إضافة',
+    'action.edit': 'تعديل',
+    'action.delete': 'حذف',
+    'action.save': 'حفظ',
+    'action.cancel': 'إلغاء',
+    'action.search': 'بحث',
+    'action.refresh': 'تحديث',
+    'action.close': 'إغلاق',
   },
 
   fr: {
@@ -166,7 +198,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.clients': 'Clients',
     'nav.cases': 'Dossiers',
     'nav.asylum': 'Asile/Immigration',
-    'nav.courtLog': 'Journal du Tribunal',
+    'nav.courtLog': 'Détails du Tribunal',
+    'nav.documents': 'Documents',
     'nav.tasks': 'Tâches',
     'nav.calendar': 'Calendrier',
     'nav.messages': 'Messages',
@@ -175,6 +208,21 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.users': 'Utilisateurs',
     'nav.settings': 'Paramètres',
     'nav.logout': 'Déconnexion',
+    
+    // Export/Import
+    'nav.exportExcel': 'Exporter Excel',
+    'nav.importExcel': 'Importer Excel',
+    'nav.exportAll': 'Tout Exporter',
+    
+    // Common actions
+    'action.add': 'Ajouter',
+    'action.edit': 'Modifier',
+    'action.delete': 'Supprimer',
+    'action.save': 'Enregistrer',
+    'action.cancel': 'Annuler',
+    'action.search': 'Rechercher',
+    'action.refresh': 'Actualiser',
+    'action.close': 'Fermer',
   },
 
   el: {
@@ -219,7 +267,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.clients': 'Πελάτες',
     'nav.cases': 'Υποθέσεις',
     'nav.asylum': 'Άσυλο/Μετανάστευση',
-    'nav.courtLog': 'Ημερολόγιο Δικαστηρίου',
+    'nav.courtLog': 'Λεπτομέρειες Δικαστηρίου',
+    'nav.documents': 'Έγγραφα',
     'nav.tasks': 'Εργασίες',
     'nav.calendar': 'Ημερολόγιο',
     'nav.messages': 'Μηνύματα',
@@ -228,6 +277,21 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.users': 'Χρήστες',
     'nav.settings': 'Ρυθμίσεις',
     'nav.logout': 'Αποσύνδεση',
+    
+    // Export/Import
+    'nav.exportExcel': 'Εξαγωγή Excel',
+    'nav.importExcel': 'Εισαγωγή Excel',
+    'nav.exportAll': 'Εξαγωγή Όλων',
+    
+    // Common actions
+    'action.add': 'Προσθήκη',
+    'action.edit': 'Επεξεργασία',
+    'action.delete': 'Διαγραφή',
+    'action.save': 'Αποθήκευση',
+    'action.cancel': 'Ακύρωση',
+    'action.search': 'Αναζήτηση',
+    'action.refresh': 'Ανανέωση',
+    'action.close': 'Κλείσιμο',
   },
 }
 

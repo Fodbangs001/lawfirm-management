@@ -1,5 +1,6 @@
 import { ReactNode, useRef } from 'react'
 import { useAuth } from '@/lib/auth'
+import { useT } from '@/lib/useI18n'
 import {
   LayoutDashboard,
   Users,
@@ -36,19 +37,19 @@ interface LayoutProps {
 }
 
 const navItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'clients', label: 'Clients', icon: Users },
-  { id: 'cases', label: 'Cases', icon: Briefcase },
-  { id: 'asylum', label: 'Asylum/Immigration', icon: Globe },
-  { id: 'court-log', label: 'Court Log', icon: Gavel },
-  { id: 'documents', label: 'Documents', icon: FolderOpen },
-  { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-  { id: 'calendar', label: 'Calendar', icon: Calendar },
-  { id: 'messages', label: 'Messages', icon: MessageSquare },
-  { id: 'billing', label: 'Time & Billing', icon: Clock },
-  { id: 'reports', label: 'Reports', icon: BarChart3 },
-  { id: 'users', label: 'Users', icon: UserCog },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+  { id: 'clients', labelKey: 'nav.clients', icon: Users },
+  { id: 'cases', labelKey: 'nav.cases', icon: Briefcase },
+  { id: 'asylum', labelKey: 'nav.asylum', icon: Globe },
+  { id: 'court-log', labelKey: 'nav.courtLog', icon: Gavel },
+  { id: 'documents', labelKey: 'nav.documents', icon: FolderOpen },
+  { id: 'tasks', labelKey: 'nav.tasks', icon: CheckSquare },
+  { id: 'calendar', labelKey: 'nav.calendar', icon: Calendar },
+  { id: 'messages', labelKey: 'nav.messages', icon: MessageSquare },
+  { id: 'billing', labelKey: 'nav.billing', icon: Clock },
+  { id: 'reports', labelKey: 'nav.reports', icon: BarChart3 },
+  { id: 'users', labelKey: 'nav.users', icon: UserCog },
+  { id: 'settings', labelKey: 'nav.settings', icon: Settings },
 ]
 
 // WhatsApp Icon Component
@@ -93,6 +94,7 @@ function WhatsAppSupportButton() {
 
 export function Layout({ children, activeView, onNavigate, onExport, onImport }: LayoutProps) {
   const { user, logout } = useAuth()
+  const t = useT()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [importMenuOpen, setImportMenuOpen] = useState(false)
@@ -150,7 +152,7 @@ export function Layout({ children, activeView, onNavigate, onExport, onImport }:
               )}
             >
               <item.icon size={20} />
-              {sidebarOpen && <span>{item.label}</span>}
+              {sidebarOpen && <span>{t(item.labelKey)}</span>}
             </button>
           ))}
 
@@ -167,7 +169,7 @@ export function Layout({ children, activeView, onNavigate, onExport, onImport }:
                 <FileDown size={20} />
                 {sidebarOpen && (
                   <>
-                    <span className="flex-1 text-left">Export Excel</span>
+                    <span className="flex-1 text-left">{t('nav.exportExcel')}</span>
                     {exportMenuOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </>
                 )}
@@ -180,42 +182,42 @@ export function Layout({ children, activeView, onNavigate, onExport, onImport }:
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
                   >
                     <Users size={16} />
-                    Clients
+                    {t('nav.clients')}
                   </button>
                   <button
                     onClick={() => onExport('cases')}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
                   >
                     <Briefcase size={16} />
-                    Cases
+                    {t('nav.cases')}
                   </button>
                   <button
                     onClick={() => onExport('tasks')}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
                   >
                     <CheckSquare size={16} />
-                    Tasks
+                    {t('nav.tasks')}
                   </button>
                   <button
                     onClick={() => onExport('court-logs')}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
                   >
                     <Gavel size={16} />
-                    Court Logs
+                    {t('nav.courtLog')}
                   </button>
                   <button
                     onClick={() => onExport('billing')}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
                   >
                     <Clock size={16} />
-                    Time & Billing
+                    {t('nav.billing')}
                   </button>
                   <button
                     onClick={() => onExport('all')}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg hover:bg-primary/10 text-primary font-medium"
                   >
                     <FileDown size={16} />
-                    Export All
+                    {t('nav.exportAll')}
                   </button>
                 </div>
               )}
@@ -235,7 +237,7 @@ export function Layout({ children, activeView, onNavigate, onExport, onImport }:
                 <FileUp size={20} />
                 {sidebarOpen && (
                   <>
-                    <span className="flex-1 text-left">Import Excel</span>
+                    <span className="flex-1 text-left">{t('nav.importExcel')}</span>
                     {importMenuOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </>
                 )}
@@ -271,21 +273,21 @@ export function Layout({ children, activeView, onNavigate, onExport, onImport }:
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
                   >
                     <Users size={16} />
-                    Import Clients
+                    {t('nav.clients')}
                   </button>
                   <button
                     onClick={() => casesFileRef.current?.click()}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
                   >
                     <Briefcase size={16} />
-                    Import Cases
+                    {t('nav.cases')}
                   </button>
                   <button
                     onClick={() => tasksFileRef.current?.click()}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
                   >
                     <CheckSquare size={16} />
-                    Import Tasks
+                    {t('nav.tasks')}
                   </button>
                   <p className="text-xs text-muted-foreground px-3 py-1">
                     Supports .xlsx, .xls, .csv
@@ -316,7 +318,7 @@ export function Layout({ children, activeView, onNavigate, onExport, onImport }:
             className={cn("w-full mt-2", !sidebarOpen && "justify-center")}
           >
             <LogOut size={18} />
-            {sidebarOpen && <span className="ml-2">Logout</span>}
+            {sidebarOpen && <span className="ml-2">{t('nav.logout')}</span>}
           </Button>
         </div>
       </aside>

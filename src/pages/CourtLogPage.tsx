@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Client, Case, CourtLog } from '@/lib/types'
+import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -42,6 +43,7 @@ import {
   Briefcase,
   FileDown,
   MoreVertical,
+  RefreshCw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, differenceInDays, addDays } from 'date-fns'
@@ -56,13 +58,12 @@ import {
 interface CourtLogPageProps {
   clients: Client[]
   cases: Case[]
+  onRefresh?: () => void
 }
 
-export function CourtLogPage({ clients, cases }: CourtLogPageProps) {
-  const [courtLogs, setCourtLogs] = useState<CourtLog[]>(() => {
-    const saved = localStorage.getItem('court-logs')
-    return saved ? JSON.parse(saved) : []
-  })
+export function CourtLogPage({ clients, cases, onRefresh }: CourtLogPageProps) {
+  const [courtLogs, setCourtLogs] = useState<CourtLog[]>([])
+  const [loading, setLoading] = useState(true)
 
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingLog, setEditingLog] = useState<CourtLog | null>(null)
@@ -83,6 +84,50 @@ export function CourtLogPage({ clients, cases }: CourtLogPageProps) {
     reminderDaysBefore: 3,
     status: 'Scheduled' as CourtLog['status'],
   })
+
+  // Load court logs from Firebase
+  const loadCourtLogs = async () => {
+    try {
+      setLoading(true)
+      const result = await api.getCourtLogs()
+      setCourtLogs(result.courtLogs || [])
+      
+      // Migrate any existing localStorage data to Firebase (one-time migration)
+      const localData = localStorage.getItem('court-logs')
+      if (localData) {
+        const localLogs: CourtLog[] = JSON.parse(localData)
+        if (localLogs.length > 0 && result.courtLogs.length === 0) {
+          // Migrate local data to Firebase
+          toast.info('Migrating court logs to cloud storage...')
+          for (const log of localLogs) {
+            try {
+              await api.createCourtLog(log)
+            } catch (err) {
+              console.error('Failed to migrate court log:', err)
+            }
+          }
+          // Reload from Firebase
+          const migrated = await api.getCourtLogs()
+          setCourtLogs(migrated.courtLogs || [])
+          // Clear localStorage after successful migration
+          localStorage.removeItem('court-logs')
+          toast.success(`Migrated ${localLogs.length} court logs to cloud storage`)
+        } else if (result.courtLogs.length > 0) {
+          // Firebase has data, clear local storage
+          localStorage.removeItem('court-logs')
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load court logs:', error)
+      toast.error('Failed to load court logs')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadCourtLogs()
+  }, [])
 
   // Get client name by ID
   const getClientName = (clientId: string) => {
@@ -123,12 +168,6 @@ export function CourtLogPage({ clients, cases }: CourtLogPageProps) {
     })
   }, [courtLogs])
 
-  // Save to localStorage
-  const saveLogs = (logs: CourtLog[]) => {
-    setCourtLogs(logs)
-    localStorage.setItem('court-logs', JSON.stringify(logs))
-  }
-
   const openCreateDialog = () => {
     setEditingLog(null)
     setFormData({
@@ -167,76 +206,82 @@ export function CourtLogPage({ clients, cases }: CourtLogPageProps) {
     setIsDialogOpen(true)
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.clientId || !formData.courtDate || !formData.courtTime || !formData.courtName || !formData.purpose) {
       toast.error('Please fill in all required fields')
       return
     }
 
-    const now = new Date().toISOString()
     const clientName = getClientName(formData.clientId)
     const caseNumber = formData.caseId ? getCaseNumber(formData.caseId) : undefined
 
-    if (editingLog) {
-      // Update existing
-      const updated = courtLogs.map(log =>
-        log.id === editingLog.id
-          ? {
-              ...log,
-              ...formData,
-              clientName,
-              caseNumber,
-              updatedAt: now,
-            }
-          : log
-      )
-      saveLogs(updated)
-      toast.success('Court log updated successfully')
-    } else {
-      // Create new
-      const newLog: CourtLog = {
-        id: `court-${Date.now()}`,
-        ...formData,
-        clientName,
-        caseNumber,
-        reminderSentToLawyer: false,
-        reminderSentToClient: false,
-        createdAt: now,
-        updatedAt: now,
+    try {
+      if (editingLog) {
+        // Update existing in Firebase
+        await api.updateCourtLog(editingLog.id, {
+          ...formData,
+          clientName,
+          caseNumber,
+        })
+        toast.success('Court log updated successfully')
+      } else {
+        // Create new in Firebase
+        await api.createCourtLog({
+          ...formData,
+          clientName,
+          caseNumber,
+          reminderSentToLawyer: false,
+          reminderSentToClient: false,
+        })
+        toast.success('Court date scheduled successfully')
       }
-      saveLogs([...courtLogs, newLog])
-      toast.success('Court date scheduled successfully')
+
+      setIsDialogOpen(false)
+      await loadCourtLogs()
+      onRefresh?.()
+    } catch (error) {
+      console.error('Failed to save court log:', error)
+      toast.error('Failed to save court log')
     }
-
-    setIsDialogOpen(false)
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this court log?')) return
-    saveLogs(courtLogs.filter(log => log.id !== id))
-    toast.success('Court log deleted')
+    
+    try {
+      await api.deleteCourtLog(id)
+      toast.success('Court log deleted')
+      await loadCourtLogs()
+      onRefresh?.()
+    } catch (error) {
+      console.error('Failed to delete court log:', error)
+      toast.error('Failed to delete court log')
+    }
   }
 
-  const handleStatusChange = (id: string, status: CourtLog['status']) => {
-    const updated = courtLogs.map(log =>
-      log.id === id ? { ...log, status, updatedAt: new Date().toISOString() } : log
-    )
-    saveLogs(updated)
-    toast.success(`Status updated to ${status}`)
+  const handleStatusChange = async (id: string, status: CourtLog['status']) => {
+    try {
+      await api.updateCourtLog(id, { status })
+      toast.success(`Status updated to ${status}`)
+      await loadCourtLogs()
+    } catch (error) {
+      console.error('Failed to update status:', error)
+      toast.error('Failed to update status')
+    }
   }
 
-  const sendReminder = (log: CourtLog, to: 'lawyer' | 'client') => {
-    const updated = courtLogs.map(l =>
-      l.id === log.id
-        ? {
-            ...l,
-            reminderSentToLawyer: to === 'lawyer' ? true : l.reminderSentToLawyer,
-            reminderSentToClient: to === 'client' ? true : l.reminderSentToClient,
-          }
-        : l
-    )
-    saveLogs(updated)
-    toast.success(`Reminder sent to ${to}`)
+  const sendReminder = async (log: CourtLog, to: 'lawyer' | 'client') => {
+    try {
+      await api.updateCourtLog(log.id, {
+        reminderSentToLawyer: to === 'lawyer' ? true : log.reminderSentToLawyer,
+        reminderSentToClient: to === 'client' ? true : log.reminderSentToClient,
+      })
+      toast.success(`Reminder sent to ${to}`)
+      await loadCourtLogs()
+    } catch (error) {
+      console.error('Failed to send reminder:', error)
+      toast.error('Failed to send reminder')
+    }
   }
 
 
@@ -269,6 +314,15 @@ export function CourtLogPage({ clients, cases }: CourtLogPageProps) {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <span className="ml-3 text-muted-foreground">Loading court logs...</span>
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -280,6 +334,9 @@ export function CourtLogPage({ clients, cases }: CourtLogPageProps) {
           <p className="text-muted-foreground">Track court dates and set reminders for lawyers and clients</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={loadCourtLogs} title="Refresh">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon">

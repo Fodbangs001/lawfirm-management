@@ -925,3 +925,231 @@ export const dashboardStorage = {
     }
   },
 }
+
+// ============================================
+// BILLING PAYMENTS STORAGE
+// ============================================
+
+export const billingPaymentsStorage = {
+  async getAll(): Promise<any[]> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.billingPayments))
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    } catch (error) {
+      console.error('Error getting billing payments:', error)
+      return []
+    }
+  },
+
+  async create(data: any): Promise<any> {
+    const id = generateId('payment')
+    const payment = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString(),
+    }
+    await setDoc(doc(db, COLLECTIONS.billingPayments, id), payment)
+    return payment
+  },
+
+  async update(id: string, data: any): Promise<any> {
+    const ref = doc(db, COLLECTIONS.billingPayments, id)
+    await updateDoc(ref, { ...data, updatedAt: new Date().toISOString() })
+    const updated = await getDoc(ref)
+    return { id, ...updated.data() }
+  },
+
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.billingPayments, id))
+  },
+}
+
+// ============================================
+// BILLING EXPENSES STORAGE
+// ============================================
+
+export const billingExpensesStorage = {
+  async getAll(): Promise<any[]> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.billingExpenses))
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    } catch (error) {
+      console.error('Error getting billing expenses:', error)
+      return []
+    }
+  },
+
+  async create(data: any): Promise<any> {
+    const id = generateId('expense')
+    const expense = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString(),
+    }
+    await setDoc(doc(db, COLLECTIONS.billingExpenses, id), expense)
+    return expense
+  },
+
+  async update(id: string, data: any): Promise<any> {
+    const ref = doc(db, COLLECTIONS.billingExpenses, id)
+    await updateDoc(ref, { ...data, updatedAt: new Date().toISOString() })
+    const updated = await getDoc(ref)
+    return { id, ...updated.data() }
+  },
+
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.billingExpenses, id))
+  },
+}
+
+// ============================================
+// BILLING OTHER PAYMENTS STORAGE
+// ============================================
+
+export const billingOtherStorage = {
+  async getAll(): Promise<any[]> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.billingOther))
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    } catch (error) {
+      console.error('Error getting billing other payments:', error)
+      return []
+    }
+  },
+
+  async create(data: any): Promise<any> {
+    const id = generateId('other')
+    const payment = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString(),
+    }
+    await setDoc(doc(db, COLLECTIONS.billingOther, id), payment)
+    return payment
+  },
+
+  async update(id: string, data: any): Promise<any> {
+    const ref = doc(db, COLLECTIONS.billingOther, id)
+    await updateDoc(ref, { ...data, updatedAt: new Date().toISOString() })
+    const updated = await getDoc(ref)
+    return { id, ...updated.data() }
+  },
+
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.billingOther, id))
+  },
+}
+
+// ============================================
+// BILLING NOTIFICATIONS STORAGE
+// ============================================
+
+export const billingNotificationsStorage = {
+  async getAll(): Promise<any[]> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.billingNotifications))
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    } catch (error) {
+      console.error('Error getting billing notifications:', error)
+      return []
+    }
+  },
+
+  async create(data: any): Promise<any> {
+    const id = generateId('notif')
+    const notification = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString(),
+    }
+    await setDoc(doc(db, COLLECTIONS.billingNotifications, id), notification)
+    return notification
+  },
+
+  async update(id: string, data: any): Promise<any> {
+    const ref = doc(db, COLLECTIONS.billingNotifications, id)
+    await updateDoc(ref, { ...data, updatedAt: new Date().toISOString() })
+    const updated = await getDoc(ref)
+    return { id, ...updated.data() }
+  },
+
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.billingNotifications, id))
+  },
+}
+
+// ============================================
+// ASYLUM NOTIFICATIONS STORAGE
+// ============================================
+
+export const asylumNotificationsStorage = {
+  async getAll(): Promise<any[]> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.asylumNotifications))
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    } catch (error) {
+      console.error('Error getting asylum notifications:', error)
+      return []
+    }
+  },
+
+  async create(data: any): Promise<any> {
+    const id = generateId('asylum-notif')
+    const notification = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString(),
+    }
+    await setDoc(doc(db, COLLECTIONS.asylumNotifications, id), notification)
+    return notification
+  },
+
+  async update(id: string, data: any): Promise<any> {
+    const ref = doc(db, COLLECTIONS.asylumNotifications, id)
+    await updateDoc(ref, { ...data, updatedAt: new Date().toISOString() })
+    const updated = await getDoc(ref)
+    return { id, ...updated.data() }
+  },
+
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.asylumNotifications, id))
+  },
+}
+
+// ============================================
+// ASYLUM PAYMENTS STORAGE
+// ============================================
+
+export const asylumPaymentsStorage = {
+  async getAll(): Promise<any[]> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.asylumPayments))
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    } catch (error) {
+      console.error('Error getting asylum payments:', error)
+      return []
+    }
+  },
+
+  async create(data: any): Promise<any> {
+    const id = generateId('asylum-pay')
+    const payment = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString(),
+    }
+    await setDoc(doc(db, COLLECTIONS.asylumPayments, id), payment)
+    return payment
+  },
+
+  async update(id: string, data: any): Promise<any> {
+    const ref = doc(db, COLLECTIONS.asylumPayments, id)
+    await updateDoc(ref, { ...data, updatedAt: new Date().toISOString() })
+    const updated = await getDoc(ref)
+    return { id, ...updated.data() }
+  },
+
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, COLLECTIONS.asylumPayments, id))
+  },
+}

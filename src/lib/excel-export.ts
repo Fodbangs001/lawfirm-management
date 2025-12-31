@@ -204,11 +204,72 @@ export function formatExpensesForExport(expenses: any[]) {
 
 // ==================== IMPORT FUNCTIONS ====================
 
+// Helper function to extract actual value from ExcelJS cell
+function getCellValue(cell: ExcelJS.Cell | undefined): any {
+  if (!cell || cell.value === null || cell.value === undefined) {
+    return ''
+  }
+
+  const value = cell.value
+
+  // Handle richText objects
+  if (typeof value === 'object' && value !== null) {
+    // RichText format: { richText: [{ text: '...' }, ...] }
+    if ('richText' in value && Array.isArray((value as any).richText)) {
+      return (value as any).richText.map((rt: any) => rt.text || '').join('')
+    }
+    
+    // Formula result: { formula: '...', result: ... }
+    if ('result' in value) {
+      return (value as any).result
+    }
+    
+    // Hyperlink: { text: '...', hyperlink: '...' }
+    if ('text' in value) {
+      return (value as any).text
+    }
+    
+    // Date objects
+    if (value instanceof Date) {
+      return value.toISOString().split('T')[0] // Return YYYY-MM-DD format
+    }
+
+    // SharedString or other complex types - try to extract text
+    if ('sharedString' in value) {
+      return String((value as any).sharedString || '')
+    }
+    
+    // Fallback: try to stringify
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+
+  // Handle simple values (string, number, boolean)
+  return value
+}
+
 // Read Excel file and return data as array of objects
 export async function importFromExcel(file: File): Promise<any[]> {
+  const fileName = file.name.toLowerCase()
+  
+  // Handle CSV files
+  if (fileName.endsWith('.csv')) {
+    return importFromCSV(file)
+  }
+  
+  // Handle Excel files (.xlsx, .xls)
   const workbook = new ExcelJS.Workbook()
   const buffer = await file.arrayBuffer()
-  await workbook.xlsx.load(buffer)
+  
+  try {
+    await workbook.xlsx.load(buffer)
+  } catch (error) {
+    console.error('Error loading Excel file:', error)
+    throw new Error('Failed to read Excel file. Please ensure the file is a valid .xlsx or .xls file.')
+  }
 
   // Get first sheet
   const worksheet = workbook.worksheets[0]
@@ -219,27 +280,111 @@ export async function importFromExcel(file: File): Promise<any[]> {
   const jsonData: any[] = []
   const headers: string[] = []
 
-  worksheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) {
-      // First row is headers
-      row.eachCell((cell, colNumber) => {
-        headers[colNumber - 1] = String(cell.value || '')
-      })
-    } else {
-      // Data rows
-      const rowData: any = {}
-      row.eachCell((cell, colNumber) => {
-        const header = headers[colNumber - 1]
-        if (header) {
-          rowData[header] = cell.value
+  // Get the column count from the first row
+  const headerRow = worksheet.getRow(1)
+  const columnCount = headerRow.cellCount || worksheet.columnCount || 0
+
+  if (columnCount === 0) {
+    throw new Error('No columns found in the Excel file. Please ensure the file has data.')
+  }
+
+  // Read headers from the first row (use getCell to ensure all columns are read)
+  for (let colNum = 1; colNum <= columnCount; colNum++) {
+    const cell = headerRow.getCell(colNum)
+    const headerValue = getCellValue(cell)
+    headers[colNum - 1] = String(headerValue || `Column${colNum}`).trim()
+  }
+
+  // Read data rows (starting from row 2)
+  const rowCount = worksheet.rowCount || 0
+  for (let rowNum = 2; rowNum <= rowCount; rowNum++) {
+    const row = worksheet.getRow(rowNum)
+    const rowData: any = {}
+    let hasData = false
+
+    // Read each cell by column number to ensure alignment
+    for (let colNum = 1; colNum <= columnCount; colNum++) {
+      const header = headers[colNum - 1]
+      if (header) {
+        const cell = row.getCell(colNum)
+        const cellValue = getCellValue(cell)
+        
+        if (cellValue !== '' && cellValue !== null && cellValue !== undefined) {
+          rowData[header] = cellValue
+          hasData = true
         }
-      })
-      if (Object.keys(rowData).length > 0) {
-        jsonData.push(rowData)
       }
     }
-  })
 
+    // Only add rows that have at least some data
+    if (hasData) {
+      jsonData.push(rowData)
+    }
+  }
+
+  return jsonData
+}
+
+// Read CSV file and return data as array of objects
+async function importFromCSV(file: File): Promise<any[]> {
+  const text = await file.text()
+  const lines = text.split(/\r?\n/).filter(line => line.trim())
+  
+  if (lines.length < 2) {
+    throw new Error('CSV file must have at least a header row and one data row')
+  }
+  
+  // Parse CSV line (handle quoted values with commas)
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = []
+    let current = ''
+    let inQuotes = false
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i]
+      
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"'
+          i++ // Skip the escaped quote
+        } else {
+          inQuotes = !inQuotes
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim())
+        current = ''
+      } else {
+        current += char
+      }
+    }
+    
+    result.push(current.trim())
+    return result
+  }
+  
+  const headers = parseCSVLine(lines[0])
+  const jsonData: any[] = []
+  
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseCSVLine(lines[i])
+    const rowData: any = {}
+    let hasData = false
+    
+    for (let j = 0; j < headers.length; j++) {
+      const header = headers[j]
+      const value = values[j] || ''
+      
+      if (header && value) {
+        rowData[header] = value
+        hasData = true
+      }
+    }
+    
+    if (hasData) {
+      jsonData.push(rowData)
+    }
+  }
+  
   return jsonData
 }
 
